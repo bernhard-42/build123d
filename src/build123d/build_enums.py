@@ -29,6 +29,17 @@ from __future__ import annotations
 from enum import Enum, auto
 
 
+class Align(Enum):
+    """Align object about Axis"""
+
+    MIN = auto()
+    CENTER = auto()
+    MAX = auto()
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}.{self.name}>"
+
+
 class Select(Enum):
     """Selector scope - all or last operation"""
 
@@ -91,28 +102,6 @@ class FontStyle(Enum):
     REGULAR = auto()
     BOLD = auto()
     ITALIC = auto()
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__}.{self.name}>"
-
-
-class Halign(Enum):
-    """Text Horizontal Alignment"""
-
-    CENTER = auto()
-    LEFT = auto()
-    RIGHT = auto()
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__}.{self.name}>"
-
-
-class Valign(Enum):
-    """Text Vertical Alignment"""
-
-    CENTER = auto()
-    TOP = auto()
-    BOTTOM = auto()
 
     def __repr__(self):
         return f"<{self.__class__.__name__}.{self.name}>"

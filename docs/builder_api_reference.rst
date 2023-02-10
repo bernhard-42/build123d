@@ -1,3 +1,5 @@
+.. _builder_api_reference:
+
 #####################
 Builder API Reference
 #####################
@@ -10,17 +12,18 @@ Selector Methods
 .. automethod:: build_common::Builder.faces
 .. automethod:: build_common::Builder.edges
 .. automethod:: build_common::Builder.wires
-.. automethod:: build_part::BuildPart.solids
+.. automethod:: build_common::Builder.solids
 
 *****
 Enums
 *****
 
-.. py:module:: build_common
+.. py:module:: build_enums
 
+.. autoclass:: Align
+.. autoclass:: CenterOf
 .. autoclass:: FontStyle
 .. autoclass:: GeomType
-.. autoclass:: Halign
 .. autoclass:: Keep
 .. autoclass:: Kind
 .. autoclass:: Mode
@@ -28,8 +31,23 @@ Enums
 .. autoclass:: SortBy
 .. autoclass:: Transition
 .. autoclass:: Until
-.. autoclass:: Valign
 
+**********
+Workplanes
+**********
+
+.. py:module:: build_common
+
+.. autoclass:: Workplanes
+
+*********
+Locations
+*********
+
+.. autoclass:: build_common::Locations
+.. autoclass:: build_common::GridLocations
+.. autoclass:: build_common::HexLocations
+.. autoclass:: build_common::PolarLocations
 
 ******************************
 Generic Objects and Operations
@@ -98,6 +116,7 @@ Objects
 .. autoclass:: Ellipse
 .. autoclass:: Polygon
 .. autoclass:: Rectangle
+.. autoclass:: RectangleRounded
 .. autoclass:: RegularPolygon
 .. autoclass:: SlotArc
 .. autoclass:: SlotCenterPoint

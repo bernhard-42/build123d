@@ -3,7 +3,6 @@ from build123d.build_line import *
 from build123d.build_sketch import *
 from build123d.build_part import *
 from build123d.build_generic import *
-from build123d.abstract_operations import *
 from build123d.direct_api import *
 
 __all__ = [
@@ -14,14 +13,13 @@ __all__ = [
     "IN",
     "FT",
     # Enums
+    "Align",
     "Select",
     "Kind",
     "Keep",
     "Mode",
     "Transition",
     "FontStyle",
-    "Halign",
-    "Valign",
     "Until",
     "SortBy",
     "GeomType",
@@ -34,7 +32,6 @@ __all__ = [
     "Rotation",
     "RotationLike",
     "ShapeList",
-    "BaseSketchOperation",
     "SVG",
     # "Builder",
     "Add",
@@ -83,10 +80,13 @@ __all__ = [
     "MakeFace",
     "MakeHull",
     "Offset",
+    "BasePartObject",
+    "BaseSketchObject",
     "Circle",
     "Ellipse",
     "Polygon",
     "Rectangle",
+    "RectangleRounded",
     "RegularPolygon",
     "SlotArc",
     "SlotCenterPoint",

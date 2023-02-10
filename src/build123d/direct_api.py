@@ -8,10 +8,6 @@ date: Oct 14, 2022
 desc:
     This python module is a CAD library based on OpenCascade.
 
-TODO:
-- Update Vector so it can be initialized with a Vertex or Location
-- Update VectorLike to include a Vertex and Location
-
 license:
 
     Copyright 2022 Gumyr
@@ -43,8 +39,9 @@ import os
 import sys
 import warnings
 from abc import ABC, abstractmethod
-from anytree import Node, RenderTree, NodeMixin
+from anytree import Node, RenderTree, NodeMixin, PreOrderIter
 from io import BytesIO
+from itertools import combinations
 from math import degrees, inf, pi, radians, sqrt
 from typing import (
     Any,
@@ -65,7 +62,7 @@ from typing_extensions import Literal
 from vtkmodules.vtkCommonDataModel import vtkPolyData
 from vtkmodules.vtkFiltersCore import vtkPolyDataNormals, vtkTriangleFilter
 
-from build123d.build_enums import Until
+from build123d.build_enums import Align, Until
 
 import OCP.GeomAbs as ga  # Geometry type enum
 import OCP.IFSelect
@@ -262,13 +259,16 @@ from build123d.build_enums import (
     FontStyle,
     FrameMethod,
     GeomType,
-    Halign,
     Kind,
     PositionMode,
     SortBy,
     Transition,
-    Valign,
 )
+
+# Create a build123d logger to distinguish these logs from application logs.
+# If the user doesn't configure logging, all build123d logs will be discarded.
+logging.getLogger("build123d").addHandler(logging.NullHandler())
+logger = logging.getLogger("build123d")
 
 TOLERANCE = 1e-6
 TOL = 1e-2
@@ -524,17 +524,31 @@ class Vector:
         """Mathematical dot function"""
         return self.wrapped.Dot(vec.wrapped)
 
-    def sub(self, vec: Vector) -> Vector:
+    def sub(self, vec: VectorLike) -> Vector:
         """Mathematical subtraction function"""
-        return Vector(self.wrapped.Subtracted(vec.wrapped))
+        if isinstance(vec, Vector):
+            result = Vector(self.wrapped.Subtracted(vec.wrapped))
+        elif isinstance(vec, tuple):
+            result = Vector(self.wrapped.Subtracted(Vector(vec).wrapped))
+        else:
+            raise ValueError("Only Vectors or tuples can be subtracted from Vectors")
+
+        return result
 
     def __sub__(self, vec: Vector) -> Vector:
         """Mathematical subtraction function"""
         return self.sub(vec)
 
-    def add(self, vec: Vector) -> Vector:
+    def add(self, vec: VectorLike) -> Vector:
         """Mathematical addition function"""
-        return Vector(self.wrapped.Added(vec.wrapped))
+        if isinstance(vec, Vector):
+            result = Vector(self.wrapped.Added(vec.wrapped))
+        elif isinstance(vec, tuple):
+            result = Vector(self.wrapped.Added(Vector(vec).wrapped))
+        else:
+            raise ValueError("Only Vectors or tuples can be added to Vectors")
+
+        return result
 
     def __add__(self, vec: Vector) -> Vector:
         """Mathematical addition function"""
@@ -879,40 +893,30 @@ class Axis:
 
 
 class BoundBox:
-    """A BoundingBox for an object or set of objects. Wraps the OCP one"""
+    """A BoundingBox for a Shape"""
 
     def __init__(self, bounding_box: Bnd_Box) -> None:
         self.wrapped: Bnd_Box = bounding_box
         x_min, y_min, z_min, x_max, y_max, z_max = bounding_box.Get()
+        self.min = Vector(x_min, y_min, z_min)
+        self.max = Vector(x_max, y_max, z_max)
+        self.size = Vector(x_max - x_min, y_max - y_min, z_max - z_min)
 
-        self.xmin = x_min
-        self.xmax = x_max
-        self.xlen = x_max - x_min
-        self.ymin = y_min
-        self.ymax = y_max
-        self.ylen = y_max - y_min
-        self.zmin = z_min
-        self.zmax = z_max
-        self.zlen = z_max - z_min
+    @property
+    def diagonal(self) -> float:
+        """body diagonal length (i.e. object maximum size)"""
+        return self.wrapped.SquareExtent() ** 0.5
 
     def __repr__(self):
         """Display bounding box parameters"""
         return (
-            f"bbox: {self.xmin} <= x <= {self.xmax}, {self.ymin} <= y <= {self.ymax}, "
-            f"{self.zmin} <= z <= {self.zmax}"
+            f"bbox: {self.min.X} <= x <= {self.max.X}, {self.min.Y} <= y <= {self.max.Y}, "
+            f"{self.min.Z} <= z <= {self.max.Z}"
         )
 
     def center(self) -> Vector:
         """Return center of the bounding box"""
-        return Vector(
-            (self.xmax + self.xmin) / 2,
-            (self.ymax + self.ymin) / 2,
-            (self.zmax + self.zmin) / 2,
-        )
-
-    def diagonal_length(self) -> float:
-        """diagonal length (i.e. object maximum size)"""
-        return self.wrapped.SquareExtent() ** 0.5
+        return (self.min + self.max) / 2
 
     def add(
         self,
@@ -976,22 +980,22 @@ class BoundBox:
         """
 
         if (
-            bb1.xmin < bb2.xmin
-            and bb1.xmax > bb2.xmax
-            and bb1.ymin < bb2.ymin
-            and bb1.ymax > bb2.ymax
+            bb1.min.X < bb2.min.X
+            and bb1.max.X > bb2.max.X
+            and bb1.min.Y < bb2.min.Y
+            and bb1.max.Y > bb2.max.Y
         ):
-            return bb1
-
-        if (
-            bb2.xmin < bb1.xmin
-            and bb2.xmax > bb1.xmax
-            and bb2.ymin < bb1.ymin
-            and bb2.ymax > bb1.ymax
+            result = bb1
+        elif (
+            bb2.min.X < bb1.min.X
+            and bb2.max.X > bb1.max.X
+            and bb2.min.Y < bb1.min.Y
+            and bb2.max.Y > bb1.max.Y
         ):
-            return bb2
-
-        return None
+            result = bb2
+        else:
+            result = None
+        return result
 
     @classmethod
     def _from_topo_ds(
@@ -1036,13 +1040,17 @@ class BoundBox:
 
         """
         return not (
-            second_box.xmin > self.xmin
-            and second_box.ymin > self.ymin
-            and second_box.zmin > self.zmin
-            and second_box.xmax < self.xmax
-            and second_box.ymax < self.ymax
-            and second_box.zmax < self.zmax
+            second_box.min.X > self.min.X
+            and second_box.min.Y > self.min.Y
+            and second_box.min.Z > self.min.Z
+            and second_box.max.X < self.max.X
+            and second_box.max.Y < self.max.Y
+            and second_box.max.Z < self.max.Z
         )
+
+    def to_solid(self) -> Solid:
+        """A box of the same dimensions and location"""
+        return Solid.make_box(*self.size).locate(Location(self.min))
 
 
 class Color:
@@ -1072,7 +1080,6 @@ class Color:
         """
 
     def __init__(self, *args, **kwargs):
-
         if len(args) == 1:
             self.wrapped = Quantity_ColorRGBA()
             exists = Quantity_ColorRGBA.ColorFromName_s(args[0], self.wrapped)
@@ -1182,7 +1189,8 @@ class Location:
         self, translation: VectorLike, rotation: RotationLike = None
     ):  # pragma: no cover
         """Location with translation with respect to the original location.
-        If rotation is not None then the location includes the rotation (see also Rotation class)"""
+        If rotation is not None then the location includes the rotation (see also Rotation class)
+        """
 
     @overload
     def __init__(self, plane: Plane):  # pragma: no cover
@@ -1209,7 +1217,6 @@ class Location:
         with respect to the original location."""
 
     def __init__(self, *args):
-
         transform = gp_Trsf()
 
         if len(args) == 0:
@@ -1295,7 +1302,6 @@ class Location:
         return Location(self.wrapped * other.wrapped)
 
     def __pow__(self, exponent: int) -> Location:
-
         return Location(self.wrapped.Powered(exponent))
 
     def to_axis(self) -> Axis:
@@ -1401,7 +1407,6 @@ class Matrix:
         ...
 
     def __init__(self, matrix=None):
-
         if matrix is None:
             self.wrapped = gp_GTrsf()
         elif isinstance(matrix, gp_GTrsf):
@@ -1818,7 +1823,6 @@ class Mixin1D:
         return_value: Union[Mixin1D, list[Mixin1D]]
 
         if closest:
-
             dist_calc = BRepExtrema_DistShapeShape()
             dist_calc.LoadS1(self.wrapped)
 
@@ -1919,7 +1923,7 @@ class Mixin3D:
 
         if not self.is_valid():
             raise ValueError("Invalid Shape")
-        max_radius = __max_fillet(0.0, 2 * self.bounding_box().diagonal_length(), 0)
+        max_radius = __max_fillet(0.0, 2 * self.bounding_box().diagonal, 0)
 
         return max_radius
 
@@ -2060,6 +2064,64 @@ class Mixin3D:
 
         return return_value
 
+    def offset_3d(
+        self,
+        openings: Optional[Iterable[Face]],
+        thickness: float,
+        tolerance: float = 0.0001,
+        kind: Kind = Kind.ARC,
+    ) -> Solid:
+        """Shell
+
+        Make an offset solid of self.
+
+        Args:
+            openings (Optional[Iterable[Face]]): List of faces to be removed,
+                which must be part of the solid. Can be an empty list.
+            thickness (float): offset amount - positive offset outwards, negative inwards
+            tolerance (float, optional): modelling tolerance of the method. Defaults to 0.0001.
+            kind (Kind, optional): intersection type. Defaults to Kind.ARC.
+
+        Raises:
+            ValueError: Kind.TANGENT not supported
+
+        Returns:
+            Solid: A shelled solid.
+        """
+        if kind == Kind.TANGENT:
+            raise ValueError("Kind.TANGENT not supported")
+
+        kind_dict = {
+            Kind.ARC: GeomAbs_JoinType.GeomAbs_Arc,
+            Kind.INTERSECTION: GeomAbs_JoinType.GeomAbs_Intersection,
+            Kind.TANGENT: GeomAbs_JoinType.GeomAbs_Tangent,
+        }
+
+        occ_faces_list = TopTools_ListOfShape()
+        for face in openings:
+            occ_faces_list.Append(face.wrapped)
+
+        offset_builder = BRepOffsetAPI_MakeThickSolid()
+        offset_builder.MakeThickSolidByJoin(
+            self.wrapped,
+            occ_faces_list,
+            thickness,
+            tolerance,
+            Intersection=True,
+            RemoveIntEdges=True,
+            Join=kind_dict[kind],
+        )
+        offset_builder.Build()
+
+        offset_occt_solid = offset_builder.Shape()
+        offset_solid = self.__class__(offset_occt_solid)
+
+        # The Solid can be inverted, if so reverse
+        if offset_solid.volume < 0:
+            offset_solid.wrapped.Reverse()
+
+        return offset_solid
+
     def is_inside(self, point: VectorLike, tolerance: float = 1.0e-6) -> bool:
         """Returns whether or not the point is inside a solid or compound
         object within the specified tolerance.
@@ -2135,41 +2197,49 @@ class Mixin3D:
 
 
 class Shape(NodeMixin):
-    # class Shape:
-    """Represents a shape in the system. Wraps TopoDS_Shape."""
+    """Shape
 
-    def __init__(self, obj: TopoDS_Shape, **kwargs):
-        self.wrapped = downcast(obj)
+    Base class for all CAD objects such as Edge, Face, Solid, etc.
 
-        # Flag for internal use and not part of the final geometry
-        self.for_construction: bool = (
-            kwargs["for_construction"] if "for_construction" in kwargs else False
-        )
+    Args:
+        obj (TopoDS_Shape, optional): OCCT object. Defaults to None.
+        label (str, optional): Defaults to ''.
+        color (Color, optional): Defaults to None.
+        material (str, optional): tag for external tools. Defaults to ''.
+        joints (dict[str, Joint], optional): names joints - only valid for Solid
+            and Compound objects. Defaults to None.
+        parent (Compound, optional): assembly parent. Defaults to None.
+        children (list[Shape], optional): assembly children - only valid for Compounds.
+            Defaults to None.
+    """
 
-        # Helps identify this Shape through the use of an ID
-        self.label: str = kwargs["label"] if "label" in kwargs else ""
-
-        # Shapes can have a color
-        self.color: Color = kwargs["color"] if "color" in kwargs else None
-
-        # Shapes can have a material
-        self.material: str = kwargs["material"] if "material" in kwargs else ""
-
-        # All shapes can have parents
-        self.parent: Compound = kwargs["parent"] if "parent" in kwargs else None
+    def __init__(
+        self,
+        obj: TopoDS_Shape = None,
+        label: str = "",
+        color: Color = None,
+        material: str = "",
+        joints: dict[str, Joint] = None,
+        parent: Compound = None,
+        children: list[Shape] = None,
+    ):
+        self.wrapped = downcast(obj) if obj else None
+        self.for_construction = False
+        self.label = label
+        self.color = color
+        self.material = material
 
         # Bind joints to Solid
         if isinstance(self, Solid):
-            self.joints: dict[str, Joint] = (
-                kwargs["joints"] if "joints" in kwargs else {}
-            )
+            self.joints = joints if joints else {}
 
         # Bind joints and children to Compounds (other Shapes can't have children)
         if isinstance(self, Compound):
-            self.joints: dict[str, Joint] = (
-                kwargs["joints"] if "joints" in kwargs else {}
-            )
-            self.children: list = kwargs["children"] if "children" in kwargs else []
+            self.joints = joints if joints else {}
+            self.children = children if children else []
+
+        # parent must be set following children as post install accesses children
+        self.parent = parent
 
     @property
     def location(self) -> Location:
@@ -2189,10 +2259,7 @@ class Shape(NodeMixin):
     @position.setter
     def position(self, value: VectorLike):
         """Set the position component of this Shape's Location to value"""
-        gp_trsf = self.wrapped.Location().Transformation()
-        gp_trsf.SetTranslation(Vector(value).wrapped)
-        new_location = Location(gp_trsf)
-        self.wrapped.Location(new_location.wrapped)
+        self.location.position = value
 
     @property
     def orientation(self) -> Vector:
@@ -2202,28 +2269,9 @@ class Shape(NodeMixin):
         )
 
     @orientation.setter
-    def orientation(self, rotations: RotationLike):
+    def orientation(self, rotations: VectorLike):
         """Set the orientation component of this Shape's Location to rotations"""
-
-        rotations = Rotation(*rotations) if isinstance(rotations, tuple) else rotations
-
-        t_o = gp_Trsf()
-        t_o.SetTranslationPart(self.position.wrapped)
-        t_rx = gp_Trsf()
-        t_rx.SetRotation(
-            gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0)), radians(rotations.about_x)
-        )
-        t_ry = gp_Trsf()
-        t_ry.SetRotation(
-            gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 1, 0)), radians(rotations.about_y)
-        )
-        t_rz = gp_Trsf()
-        t_rz.SetRotation(
-            gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), radians(rotations.about_z)
-        )
-
-        new_location = Location(t_o * t_rx * t_ry * t_rz)
-        self.wrapped.Location(new_location.wrapped)
+        self.location.orientation = rotations
 
     class _DisplayNode(NodeMixin):
         """Used to create anytree structures from TopoDS_Shapes"""
@@ -2321,20 +2369,20 @@ class Shape(NodeMixin):
             result += f"{treestr}{name}at {address:#x}, {loc}\n"
         return result
 
-    def show_structure(
+    def show_topology(
         self,
         limit_class: Literal[
             "Compound", "Edge", "Face", "Shell", "Solid", "Vertex", "Wire"
         ] = "Vertex",
         show_center: bool = None,
     ) -> str:
-        """Display internal structure
+        """Display internal topology
 
         Display the internal structure of a Compound 'assembly' or Shape. Example:
 
         .. code::
 
-            >>> c1.show_structure()
+            >>> c1.show_topology()
 
             c1 is the root         Compound at 0x7f4a4cafafa0, Location(...))
             ├──                    Solid    at 0x7f4a4cafafd0, Location(...))
@@ -2347,14 +2395,13 @@ class Shape(NodeMixin):
 
         Args:
             limit_class: type of displayed leaf node. Defaults to 'Vertex'.
-            show_center (bool, optional): If None, shows the Location of Compound `assemblies`
+            show_center (bool, optional): If None, shows the Location of Compound 'assemblies'
                 and the bounding box center of Shapes. True or False forces the display.
                 Defaults to None.
 
         Returns:
             str: tree representation of internal structure
         """
-        """Display the internal structure of a Compound 'assembly' or Shape"""
 
         if isinstance(self, Compound) and self.children:
             show_center = False if show_center is None else show_center
@@ -2643,6 +2690,10 @@ class Shape(NodeMixin):
         """
         return self.wrapped.IsEqual(other.wrapped)
 
+    def __eq__(self, other) -> bool:
+        """Are shapes same?"""
+        return self.is_same(other) if isinstance(other, Shape) else False
+
     def is_valid(self) -> bool:
         """Returns True if no defect is detected on the shape S or any of its
         subshapes. See the OCCT docs on BRepCheck_Analyzer::IsValid for a full
@@ -2658,11 +2709,13 @@ class Shape(NodeMixin):
     def bounding_box(
         self, tolerance: float = None
     ) -> BoundBox:  # need to implement that in GEOM
-        """
-        Create a bounding box for this Shape.
+        """Create a bounding box for this Shape.
 
-        :param tolerance: Tolerance value passed to :py:class:`BoundBox`
-        :returns: A :py:class:`BoundBox` object for this Shape
+        Args:
+            tolerance (float, optional): Defaults to None.
+
+        Returns:
+            BoundBox: A box sized to contain this Shape
         """
         return BoundBox._from_topo_ds(self.wrapped, tol=tolerance)
 
@@ -2756,7 +2809,6 @@ class Shape(NodeMixin):
         return tcast(Shapes, shape_LUT[shapetype(self.wrapped)])
 
     def _entities(self, topo_type: Shapes) -> list[TopoDS_Shape]:
-
         out = {}  # using dict to prevent duplicates
 
         explorer = TopExp_Explorer(self.wrapped, inverse_shape_LUT[topo_type])
@@ -2773,7 +2825,6 @@ class Shape(NodeMixin):
     def _entities_from(
         self, child_type: Shapes, parent_type: Shapes
     ) -> Dict[Shape, list[Shape]]:
-
         res = TopTools_IndexedDataMapOfShapeListOfShape()
 
         TopTools_IndexedDataMapOfShapeListOfShape()
@@ -2920,8 +2971,19 @@ class Shape(NodeMixin):
         return result
 
     def __copy__(self) -> Shape:
-        """Return copy of self"""
-        return copy.deepcopy(self, None)
+        """Return shallow copy or reference of self
+
+        Create an copy of this Shape that shares the underlying TopoDS_TShape.
+
+        Used when there is a need for many objects with the same CAD structure but at
+        different Locations, etc. - for examples fasteners in a larger assembly. By
+        sharing the TopoDS_TShape, the memory size of such assemblies can be greatly reduced.
+
+        Changes to the CAD structure of the base object will be reflected in all instances.
+        """
+        reference = copy.deepcopy(self)
+        reference.wrapped.TShape(self.wrapped.TShape())
+        return reference
 
     def copy(self) -> Shape:
         """Here for backwards compatibility with cq-editor"""
@@ -3063,10 +3125,6 @@ class Shape(NodeMixin):
         """Return has code"""
         return self.hash_code()
 
-    def __eq__(self, other) -> bool:
-        """Are shapes equal?"""
-        return self.is_same(other) if isinstance(other, Shape) else False
-
     def _bool_op(
         self,
         args: Iterable[Shape],
@@ -3116,18 +3174,17 @@ class Shape(NodeMixin):
         return self._bool_op((self,), to_cut, cut_op)
 
     def fuse(self, *to_fuse: Shape, glue: bool = False, tol: float = None) -> Shape:
-        """Fuse the positional arguments with this Shape.
+        """fuse
+
+        Fuse a sequence of shapes into a single shape.
 
         Args:
-          glue: Sets the glue option for the algorithm, which allows
-        increasing performance of the intersection of the input shapes
-          tol: Additional tolerance
-          *toFuse: Shape:
-          glue: bool:  (Default value = False)
-          tol: float:  (Default value = None)
+            to_fuse (sequence Shape): shapes to fuse
+            glue (bool, optional): performance improvement for some shapes. Defaults to False.
+            tol (float, optional): tolerarance. Defaults to None.
 
         Returns:
-
+            Shape: fused shape
         """
 
         fuse_op = BRepAlgoAPI_Fuse()
@@ -3144,7 +3201,7 @@ class Shape(NodeMixin):
         """Intersection of the positional arguments and this Shape.
 
         Args:
-          *toIntersect: Shape:
+            toIntersect (sequence of Shape): shape to intersect
 
         Returns:
 
@@ -3481,7 +3538,7 @@ class Shape(NodeMixin):
         font: str = "Arial",
         font_path: str = None,
         kind: FontStyle = FontStyle.REGULAR,
-        valign: Valign = Valign.CENTER,
+        valign: Align = Align.CENTER,
         start: float = 0,
     ) -> Compound:
         """Projected 3D text following the given path on Shape
@@ -3504,7 +3561,7 @@ class Shape(NodeMixin):
           font: Font name. Defaults to "Arial".
           font_path: Path to font file. Defaults to None.
           kind: Font type. Defaults to FontStyle.REGULAR.
-          valign: Vertical Alignment. Defaults to Valign.CENTER.
+          valign: Vertical Alignment. Defaults to Align.CENTER.
           start: Relative location on path to start the text. Defaults to 0.
 
         Returns:
@@ -3517,16 +3574,16 @@ class Shape(NodeMixin):
 
         # Create text faces
         text_faces = Compound.make_2d_text(
-            txt, fontsize, font, font_path, kind, Halign.LEFT, valign, start
+            txt, fontsize, font, font_path, kind, (Align.MIN, valign), start
         ).faces()
 
-        logging.debug("projecting text sting '%s' as %d face(s)", txt, len(text_faces))
+        logger.debug("projecting text sting '%s' as %d face(s)", txt, len(text_faces))
 
         # Position each text face normal to the surface along the path and project to the surface
         projected_faces = []
         for text_face in text_faces:
             bbox = text_face.bounding_box()
-            face_center_x = (bbox.xmin + bbox.xmax) / 2
+            face_center_x = (bbox.min.X + bbox.max.X) / 2
             relative_position_on_wire = start + face_center_x / path_length
             path_position = path.position_at(relative_position_on_wire)
             path_tangent = path.tangent_at(relative_position_on_wire)
@@ -3540,7 +3597,7 @@ class Shape(NodeMixin):
             projection_face: Face = text_face.translate(
                 (-face_center_x, 0, 0)
             ).transform_shape(surface_normal_plane.reverse_transform)
-            logging.debug("projecting face at %0.2f", relative_position_on_wire)
+            logger.debug("projecting face at %0.2f", relative_position_on_wire)
             projected_faces.append(
                 projection_face.project_to_shape(self, surface_normal * -1)[0]
             )
@@ -3553,7 +3610,7 @@ class Shape(NodeMixin):
                 f.thicken(depth, f.center() - shape_center) for f in projected_faces
             ]
 
-        logging.debug("finished projecting text sting '%d'", txt)
+        logger.debug("finished projecting text sting '%d'", txt)
 
         return Compound.make_compound(projected_text)
 
@@ -4303,8 +4360,8 @@ class Plane:
         elif isinstance(obj, Shape):
             return_value = obj.transform_shape(transform_matrix)
         elif isinstance(obj, BoundBox):
-            global_bottom_left = Vector(obj.xmin, obj.ymin, obj.zmin)
-            global_top_right = Vector(obj.xmax, obj.ymax, obj.zmax)
+            global_bottom_left = Vector(obj.min.X, obj.min.Y, obj.min.Z)
+            global_top_right = Vector(obj.max.X, obj.max.Y, obj.max.Z)
             local_bottom_left = global_bottom_left.transform(transform_matrix)
             local_top_right = global_top_right.transform(transform_matrix)
             local_bbox = Bnd_Box(
@@ -4398,7 +4455,11 @@ class Compound(Shape, Mixin3D):
         return result
 
     def __repr__(self):
-        return f"Compound at {id(self):#x}, label({self.label}), #children({len(self.children)})"
+        if hasattr(self, "label") and hasattr(self, "children"):
+            result = f"Compound at {id(self):#x}, label({self.label}), #children({len(self.children)})"
+        else:
+            result = f"Compound at {id(self):#x}"
+        return result
 
     @staticmethod
     def _make_compound(occt_shapes: Iterable[TopoDS_Shape]) -> TopoDS_Compound:
@@ -4443,7 +4504,7 @@ class Compound(Shape, Mixin3D):
 
     def _post_detach(self, parent: Compound):
         """Method call after detaching from `parent`."""
-        logging.debug("Removing parent of %s (%s)", self.label, parent.label)
+        logger.debug("Removing parent of %s (%s)", self.label, parent.label)
         if parent.children:
             parent.wrapped = Compound._make_compound(
                 [c.wrapped for c in parent.children]
@@ -4458,17 +4519,17 @@ class Compound(Shape, Mixin3D):
 
     def _post_attach(self, parent: Compound):
         """Method call after attaching to `parent`."""
-        logging.debug("Updated parent of %s to %s", self.label, parent.label)
+        logger.debug("Updated parent of %s to %s", self.label, parent.label)
         parent.wrapped = Compound._make_compound([c.wrapped for c in parent.children])
 
     def _post_detach_children(self, children):
         """Method call before detaching `children`."""
         if children:
             kids = ",".join([child.label for child in children])
-            logging.debug("Removing children %s from %s", kids, self.label)
+            logger.debug("Removing children %s from %s", kids, self.label)
             self.wrapped = Compound._make_compound([c.wrapped for c in self.children])
-        else:
-            logging.debug("Removing no children from %s", self.label)
+        # else:
+        #     logger.debug("Removing no children from %s", self.label)
 
     def _pre_attach_children(self, children):
         """Method call before attaching `children`."""
@@ -4479,10 +4540,56 @@ class Compound(Shape, Mixin3D):
         """Method call after attaching `children`."""
         if children:
             kids = ",".join([child.label for child in children])
-            logging.debug("Adding children %s to %s", kids, self.label)
+            logger.debug("Adding children %s to %s", kids, self.label)
             self.wrapped = Compound._make_compound([c.wrapped for c in self.children])
-        else:
-            logging.debug("Adding no children to %s", self.label)
+        # else:
+        #     logger.debug("Adding no children to %s", self.label)
+
+    def do_children_intersect(
+        self, include_parent: bool = False, tolerance: float = 1e-5
+    ) -> tuple[bool, tuple[Shape, Shape], float]:
+        """Do Children Intersect
+
+        Determine if any of the child objects within a Compound/assembly intersect by
+        intersecting each of the shapes with each other and checking for
+        a common volume.
+
+        Args:
+            include_parent (bool, optional): check parent for intersections. Defaults to False.
+            tolerance (float, optional): maximum allowable volume difference. Defaults to 1e-5.
+
+        Returns:
+            bool: do the object intersect
+        """
+        children: list[Shape] = list(PreOrderIter(self))
+        if not include_parent:
+            children.pop(0)  # remove parent
+        children_bbox = [child.bounding_box().to_solid() for child in children]
+        child_index_pairs = [
+            tuple(map(int, comb))
+            for comb in combinations([i for i in range(len(children))], 2)
+        ]
+        for child_index_pair in child_index_pairs:
+            # First check for bounding box intersections ..
+            # .. then confirm with actual object intersections which could be complex
+            bbox_common_volume = (
+                children_bbox[child_index_pair[0]]
+                .intersect(children_bbox[child_index_pair[1]])
+                .volume
+            )
+            if bbox_common_volume > tolerance:
+                common_volume = (
+                    children[child_index_pair[0]]
+                    .intersect(children[child_index_pair[1]])
+                    .volume
+                )
+                if common_volume > tolerance:
+                    return (
+                        True,
+                        (children[child_index_pair[0]], children[child_index_pair[1]]),
+                        common_volume,
+                    )
+        return (False, (None, None), None)
 
     @classmethod
     def import_step(cls, file_name: str) -> Compound:
@@ -4527,8 +4634,7 @@ class Compound(Shape, Mixin3D):
         font: str = "Arial",
         font_path: str = None,
         kind: FontStyle = FontStyle.REGULAR,
-        halign: Halign = Halign.CENTER,
-        valign: Valign = Valign.CENTER,
+        align: tuple[Align, Align] = (Align.CENTER, Align.CENTER),
         position: Plane = Plane.XY,
     ) -> Compound:
         """3D text
@@ -4542,15 +4648,15 @@ class Compound(Shape, Mixin3D):
             font (str, optional): font type. Defaults to "Arial".
             font_path (str, optional): system path to fonts. Defaults to None.
             kind (FontStyle, optional): font style. Defaults to FontStyle.REGULAR.
-            halign (Halign, optional): horizontal alignment. Defaults to Halign.CENTER.
-            valign (Valign, optional): vertical alignment. Defaults to Valign.CENTER.
+            align (tuple[Align, Align], optional): align min, center, or max of object.
+                Defaults to (Align.CENTER, Align.CENTER).
             position (Plane, optional): plane to position text. Defaults to Plane.XY.
 
         Returns:
             Compound: 3d text
         """
         text_flat = Compound.make_2d_text(
-            text, size, font, font_path, kind, halign, valign, None
+            text, size, font, font_path, kind, align, None
         )
 
         vec_normal = text_flat.faces()[0].normal_at() * height
@@ -4568,8 +4674,7 @@ class Compound(Shape, Mixin3D):
         font: str = "Arial",
         font_path: Optional[str] = None,
         font_style: FontStyle = FontStyle.REGULAR,
-        halign: Halign = Halign.LEFT,
-        valign: Valign = Valign.CENTER,
+        align: tuple[Align, Align] = (Align.CENTER, Align.CENTER),
         position_on_path: float = 0.0,
         text_path: Union[Edge, Wire] = None,
     ) -> "Compound":
@@ -4586,8 +4691,8 @@ class Compound(Shape, Mixin3D):
             font: font name
             font_path: path to font file
             font_style: text style. Defaults to FontStyle.REGULAR.
-            halign: horizontal alignment. Defaults to Halign.LEFT.
-            valign: vertical alignment. Defaults to Valign.CENTER.
+            align (tuple[Align, Align], optional): align min, center, or max of object.
+                Defaults to (Align.CENTER, Align.CENTER).
             position_on_path: the relative location on path to position the text,
                 between 0.0 and 1.0. Defaults to 0.0.
             text_path: a path for the text to follows. Defaults to None - linear text.
@@ -4614,7 +4719,7 @@ class Compound(Shape, Mixin3D):
             relative to the path. Global coordinates to position the face.
             """
             bbox = orig_face.bounding_box()
-            face_bottom_center = Vector((bbox.xmin + bbox.xmax) / 2, 0, 0)
+            face_bottom_center = Vector((bbox.min.X + bbox.max.X) / 2, 0, 0)
             relative_position_on_wire = (
                 position_on_path + face_bottom_center.X / path_length
             )
@@ -4655,21 +4760,19 @@ class Compound(Shape, Mixin3D):
         )
         text_flat = Compound(builder.Perform(font_i, NCollection_Utf8String(txt)))
 
-        bounding_box = text_flat.bounding_box()
-
-        center_alignment = Vector()
-
-        if halign == Halign.CENTER:
-            center_alignment.X = -bounding_box.xlen / 2
-        elif halign == Halign.RIGHT:
-            center_alignment.X = -bounding_box.xlen
-
-        if valign == Valign.CENTER:
-            center_alignment.Y = -bounding_box.ylen / 2
-        elif valign == Valign.TOP:
-            center_alignment.Y = -bounding_box.ylen
-
-        text_flat = text_flat.translate(center_alignment)
+        # Align the text from the bounding box
+        bbox = text_flat.bounding_box()
+        align_offset = []
+        for i in range(2):
+            if align[i] == Align.MIN:
+                align_offset.append(-bbox.min.to_tuple()[i])
+            elif align[i] == Align.CENTER:
+                align_offset.append(
+                    -(bbox.min.to_tuple()[i] + bbox.max.to_tuple()[i]) / 2
+                )
+            elif align[i] == Align.MAX:
+                align_offset.append(-bbox.max.to_tuple()[i])
+        text_flat = text_flat.translate(Vector(*align_offset))
 
         if text_path is not None:
             path_length = text_path.length
@@ -5019,7 +5122,7 @@ class Edge(Shape, Mixin1D):
             scale (bool, optional): whether to scale the specified tangent vectors before
                 interpolating. Each tangent is scaled, so it's length is equal to the derivative
                 of the Lagrange interpolated curve. I.e., set this to True, if you want to use
-                only the direction of the tangent vectors specified by ``tangents``, but not
+                only the direction of the tangent vectors specified by `tangents` , but not
                 their magnitude. Defaults to True.
             tol (float, optional): tolerance of the algorithm (consult OCC documentation).
                 Used to check that the specified points are not too close to each other, and
@@ -5279,12 +5382,64 @@ class Edge(Shape, Mixin1D):
 class Face(Shape):
     """a bounded surface that represents part of the boundary of a solid"""
 
+    @property
+    def length(self) -> float:
+        """experimental length calculation"""
+        result = None
+        if self.geom_type() == "PLANE":
+            # Reposition on Plane.XY
+            flat_face = Plane(self.to_pln()).to_local_coords(self)
+            face_vertices = flat_face.vertices().sort_by(Axis.X)
+            result = face_vertices[-1].X - face_vertices[0].X
+        return result
+
+    @property
+    def width(self) -> float:
+        """experimental width calculation"""
+        result = None
+        if self.geom_type() == "PLANE":
+            # Reposition on Plane.XY
+            flat_face = Plane(self.to_pln()).to_local_coords(self)
+            face_vertices = flat_face.vertices().sort_by(Axis.Y)
+            result = face_vertices[-1].Y - face_vertices[0].Y
+        return result
+
+    @property
+    def geometry(self) -> str:
+        """experimental geometry type"""
+        result = None
+        if self.geom_type() == "PLANE":
+            flat_face = Plane(self.to_pln()).to_local_coords(self)
+            flat_face_edges = flat_face.edges()
+            if all([e.geom_type() == "LINE" for e in flat_face_edges]):
+                flat_face_vertices = flat_face.vertices()
+                result = "POLYGON"
+                if len(flat_face_edges) == 4:
+                    edge_pairs = []
+                    for vertex in flat_face_vertices:
+                        edge_pairs.append(
+                            [e for e in flat_face_edges if vertex in e.vertices()]
+                        )
+                        edge_pair_directions = [
+                            [edge.tangent_at(0) for edge in pair] for pair in edge_pairs
+                        ]
+                    if all(
+                        [
+                            edge_directions[0].get_angle(edge_directions[1]) == 90
+                            for edge_directions in edge_pair_directions
+                        ]
+                    ):
+                        result = "RECTANGLE"
+                        if len(flat_face_edges.group_by(SortBy.LENGTH)) == 1:
+                            result = "SQUARE"
+
+        return result
+
     def _geom_adaptor(self) -> Geom_Surface:
         """ """
         return BRep_Tool.Surface_s(self.wrapped)
 
     def _uv_bounds(self) -> Tuple[float, float, float, float]:
-
         return BRepTools.UVBounds_s(self.wrapped)
 
     def __neg__(self) -> Face:
@@ -5822,13 +5977,6 @@ class Face(Shape):
 
         return cls(bldr.Face()).fix()
 
-    # def project(self, other: Face, direction: VectorLike) -> Face:
-    #     """Parallel projection of a Face to another Face"""
-    #     outer_p = tcast(Wire, self.outer_wire().project(other, direction))
-    #     inner_p = (tcast(Wire, w.project(other, direction)) for w in self.inner_wires())
-
-    #     return self.construct_on(other, outer_p, *inner_p)
-
     def project_to_shape(
         self, target_object: Shape, direction: VectorLike, taper: float = 0
     ) -> ShapeList[Face]:
@@ -5855,9 +6003,7 @@ class Face(Shape):
             ShapeList[Face]: Face(s) projected on target object ordered by distance
         """
         max_dimension = (
-            Compound.make_compound([self, target_object])
-            .bounding_box()
-            .diagonal_length()
+            Compound.make_compound([self, target_object]).bounding_box().diagonal
         )
         face_extruded = Solid.extrude_linear(
             self, Vector(direction) * max_dimension, taper=taper
@@ -5868,157 +6014,13 @@ class Face(Shape):
 
         return intersected_faces.sort_by(Axis(self.center(), direction))
 
-    # def project_to_shape(
-    #     self,
-    #     target_object: Shape,
-    #     direction: VectorLike = None,
-    #     center: VectorLike = None,
-    #     internal_face_points: list[Vector] = None,
-    # ) -> list[Face]:
-    #     """Project Face to target Object
-
-    #     Project a Face onto a Shape generating new Face(s) on the surfaces of the object
-    #     one and only one of `direction` or `center` must be provided.
-
-    #     The two types of projections are illustrated below:
-
-    #     .. image:: flatProjection.png
-    #         :alt: flatProjection
-
-    #     .. image:: conicalProjection.png
-    #         :alt: conicalProjection
-
-    #     Note that an array of faces is returned as the projection might result in faces
-    #     on the "front" and "back" of the object (or even more if there are intermediate
-    #     surfaces in the projection path). faces "behind" the projection are not
-    #     returned.
-
-    #     To help refine the resulting face, a list of planar points can be passed to
-    #     augment the surface definition. For example, when projecting a circle onto a
-    #     sphere, a circle will result which will get converted to a planar circle face.
-    #     If no points are provided, a single center point will be generated and used for
-    #     this purpose.
-
-    #     Args:
-    #       target_object: Object to project onto
-    #       direction: Parallel projection direction
-    #       center: Conical center of projection
-    #       internal_face_points: Points refining shape
-    #       target_object: Shape:
-    #       direction: VectorLike:  (Default value = None)
-    #       center: VectorLike:  (Default value = None)
-    #       internal_face_points: list[Vector]:  (Default value = None)
-
-    #     Returns:
-    #       Face(s) projected on target object
-
-    #     Raises:
-    #       ValueError: Only one of direction or center must be provided
-
-    #     """
-
-    #     # There are four phase to creation of the projected face:
-    #     # 1- extract the outer wire and project
-    #     # 2- extract the inner wires and project
-    #     # 3- extract surface points within the outer wire
-    #     # 4- build a non planar face
-
-    #     internal_face_points = internal_face_points if internal_face_points else []
-    #     if not (direction is None) ^ (center is None):
-    #         raise ValueError("One of either direction or center must be provided")
-    #     if direction is not None:
-    #         direction_vector = Vector(direction)
-    #         center_point = None
-    #     else:
-    #         direction_vector = None
-    #         center_point = Vector(center)
-
-    #     # Phase 1 - outer wire
-    #     planar_outer_wire = self.outer_wire()
-    #     projected_outer_wires = planar_outer_wire.project_to_shape(
-    #         target_object, direction_vector, center_point
-    #     )
-    #     logging.debug(
-    #         "projecting outerwire resulted in %d wires", len(projected_outer_wires)
-    #     )
-    #     # Phase 2 - inner wires
-    #     planar_inner_wire_list = [
-    #         w
-    #         if w.wrapped.Orientation() != planar_outer_wire.wrapped.Orientation()
-    #         else Wire(w.wrapped.Reversed())
-    #         for w in self.inner_wires()
-    #     ]
-    #     # Project inner wires on to potentially multiple surfaces
-    #     projected_inner_wire_list = [
-    #         w.project_to_shape(target_object, direction_vector, center_point)
-    #         for w in planar_inner_wire_list
-    #     ]
-    #     # Need to transpose this list so it's organized by surface then inner wires
-    #     projected_inner_wire_list = [list(x) for x in zip(*projected_inner_wire_list)]
-
-    #     for i in range(len(planar_inner_wire_list)):
-    #         logging.debug(
-    #             "projecting innerwire resulted in %d wires",
-    #             len(projected_inner_wire_list[i]),
-    #         )
-    #     # Ensure the length of the list is the same as that of the outer wires
-    #     projected_inner_wire_list.extend(
-    #         [
-    #             []
-    #             for _ in range(
-    #                 len(projected_outer_wires) - len(projected_inner_wire_list)
-    #             )
-    #         ]
-    #     )
-
-    #     # Phase 3 - Find points on surface by projecting a "grid" composed of internal_face_points
-
-    #     # Not sure if it's always a good idea to add an internal central point so the next
-    #     # two lines of code can be easily removed without impacting the rest
-    #     if not internal_face_points:
-    #         internal_face_points = [planar_outer_wire.center()]
-
-    #     if not internal_face_points:
-    #         projected_grid_points = []
-    #     else:
-    #         if len(internal_face_points) == 1:
-    #             planar_grid = Edge.make_line(
-    #                 planar_outer_wire.position_at(0), internal_face_points[0]
-    #             )
-    #         else:
-    #             planar_grid = Wire.make_polygon(
-    #                 [Vector(v) for v in internal_face_points]
-    #             )
-    #         projected_grids = planar_grid.project_to_shape(
-    #             target_object, direction_vector, center_point
-    #         )
-    #         projected_grid_points = [
-    #             [Vector(*v.to_tuple()) for v in grid.vertices()]
-    #             for grid in projected_grids
-    #         ]
-    #     logging.debug(
-    #         "projecting grid resulted in %d points", len(projected_grid_points)
-    #     )
-
-    #     # Phase 4 - Build the faces
-    #     projected_faces = [
-    #         Face.make_surface(
-    #             ow,
-    #             surface_points=projected_grid_points[i],
-    #             interior_wires=projected_inner_wire_list[i],
-    #         )
-    #         for i, ow in enumerate(projected_outer_wires)
-    #     ]
-
-    #     return projected_faces
-
     def make_holes(self, interior_wires: list[Wire]) -> Face:
         """Make Holes in Face
 
         Create holes in the Face 'self' from interior_wires which must be entirely interior.
         Note that making holes in faces is more efficient than using boolean operations
         with solid object. Also note that OCCT core may fail unless the orientation of the wire
-        is correct - use ``Wire(forward_wire.wrapped.Reversed())`` to reverse a wire.
+        is correct - use `Wire(forward_wire.wrapped.Reversed())` to reverse a wire.
 
         Example:
 
@@ -6099,23 +6101,6 @@ class Shell(Shape):
 
 class Solid(Shape, Mixin3D):
     """a single solid"""
-
-    @staticmethod
-    def is_solid(obj: Shape) -> bool:
-        """Returns true if the object is a solid, false otherwise
-
-        Args:
-          obj: Shape:
-
-        Returns:
-
-        """
-        if hasattr(obj, "shape_type"):
-            if obj.shape_type == Solid or (
-                obj.shape_type == Compound and len(obj.solids()) > 0
-            ):
-                return True
-        return False
 
     @classmethod
     def make_solid(cls, shell: Shell) -> Solid:
@@ -6519,16 +6504,14 @@ class Solid(Shape, Mixin3D):
         direction = Vector(direction)
 
         max_dimension = (
-            Compound.make_compound([section, target_object])
-            .bounding_box()
-            .diagonal_length()
+            Compound.make_compound([section, target_object]).bounding_box().diagonal
         )
         clipping_direction = (
             direction * max_dimension
             if until == Until.NEXT
             else -direction * max_dimension
         )
-
+        direction_axis = Axis(section.center(), clipping_direction)
         # Create a linear extrusion to start
         extrusion = Solid.extrude_linear(section, direction * max_dimension)
 
@@ -6545,7 +6528,7 @@ class Solid(Shape, Mixin3D):
 
         # Create the objects that will clip the linear extrusion
         clipping_objects = [
-            Solid.extrude_linear(f, clipping_direction) for f in clip_faces
+            Solid.extrude_linear(f, clipping_direction).fix() for f in clip_faces
         ]
 
         if until == Until.NEXT:
@@ -6555,18 +6538,25 @@ class Solid(Shape, Mixin3D):
                 # thus they could be non manifold which results failed boolean operations
                 #  - so skip these objects
                 try:
-                    extrusion = extrusion.cut(clipping_object)
+                    extrusion = (
+                        extrusion.cut(clipping_object)
+                        .solids()
+                        .sort_by(direction_axis)[0]
+                    )
                 except:
                     warnings.warn("clipping error - extrusion may be incorrect")
         else:
             extrusion_parts = [extrusion.intersect(target_object)]
             for clipping_object in clipping_objects:
                 try:
-                    extrusion_parts.append(extrusion.intersect(clipping_object))
+                    extrusion_parts.append(
+                        extrusion.intersect(clipping_object)
+                        .solids()
+                        .sort_by(direction_axis)[0]
+                    )
                 except:
                     warnings.warn("clipping error - extrusion may be incorrect")
             extrusion = Shape.fuse(*extrusion_parts)
-        extrusion = extrusion.clean()
 
         return extrusion
 
@@ -6620,7 +6610,6 @@ class Solid(Shape, Mixin3D):
         path: Union[Wire, Edge],
         mode: Union[Vector, Wire, Edge],
     ) -> bool:
-
         rotate = False
 
         if isinstance(mode, Vector):
@@ -6812,9 +6801,8 @@ class Vertex(Shape):
         Example:
             part.faces(">z").vertices("<y and <x").val() + (0, 0, 15)
 
-            which creates a new Vertex 15mm above one extracted from a part. One can add or
-            subtract a cadquery ``Vertex``, ``Vector`` or ``tuple`` of float values to a
-            Vertex with the provided extensions.
+            which creates a new Vertex 15 above one extracted from a part. One can add or
+            subtract a `Vertex` , `Vector` or `tuple` of float values to a Vertex.
         """
         if isinstance(other, Vertex):
             new_vertex = Vertex(self.X + other.X, self.Y + other.Y, self.Z + other.Z)
@@ -7303,7 +7291,7 @@ class Wire(Shape, Mixin1D):
                 output_wires.append(Wire(projected_wire.Reversed()))
             projection_object.Next()
 
-        logging.debug("wire generated %d projected wires", len(output_wires))
+        logger.debug("wire generated %d projected wires", len(output_wires))
 
         # BRepProj_Projection is inconsistent in the order that it returns projected
         # wires, sometimes front first and sometimes back - so sort this out by sorting
@@ -7330,7 +7318,7 @@ class Wire(Shape, Mixin1D):
                     )
 
             output_wires_distances.sort(key=lambda x: x[1])
-            logging.debug(
+            logger.debug(
                 "projected, filtered and sorted wire list is of length %d",
                 len(output_wires_distances),
             )
@@ -7419,17 +7407,17 @@ class SVG:
             [(0, 0, 0), (-axes_scale / 20, axes_scale / 30, 0)],
             [(-1, 0, 0), (-1, 1.5, 0)],
         )
-        arrow = arrow_arc.fuse(arrow_arc.copy().mirror(Plane.XZ))
+        arrow = arrow_arc.fuse(copy.copy(arrow_arc).mirror(Plane.XZ))
         x_label = (
             Compound.make_2d_text(
-                "X", fontsize=axes_scale / 4, halign=Halign.LEFT, valign=Valign.CENTER
+                "X", fontsize=axes_scale / 4, align=(Align.MIN, Align.CENTER)
             )
             .move(Location(x_axis @ 1))
             .edges()
         )
         y_label = (
             Compound.make_2d_text(
-                "Y", fontsize=axes_scale / 4, halign=Halign.LEFT, valign=Valign.CENTER
+                "Y", fontsize=axes_scale / 4, align=(Align.MIN, Align.CENTER)
             )
             .rotate(Axis.Z, 90)
             .move(Location(y_axis @ 1))
@@ -7437,10 +7425,7 @@ class SVG:
         )
         z_label = (
             Compound.make_2d_text(
-                "Z",
-                fontsize=axes_scale / 4,
-                halign=Halign.CENTER,
-                valign=Valign.BOTTOM,
+                "Z", fontsize=axes_scale / 4, align=(Align.CENTER, Align.MIN)
             )
             .rotate(Axis.Y, 90)
             .rotate(Axis.X, 90)
@@ -7602,14 +7587,14 @@ class SVG:
         # width pixels for x, height pixels for y
         if defaults["pixel_scale"]:
             unit_scale = defaults["pixel_scale"]
-            width = int(unit_scale * b_box.xlen + 2 * defaults["margin_left"])
-            height = int(unit_scale * b_box.ylen + 2 * defaults["margin_left"])
+            width = int(unit_scale * b_box.size.X + 2 * defaults["margin_left"])
+            height = int(unit_scale * b_box.size.Y + 2 * defaults["margin_left"])
         else:
-            unit_scale = min(width / b_box.xlen * 0.75, height / b_box.ylen * 0.75)
+            unit_scale = min(width / b_box.size.X * 0.75, height / b_box.size.Y * 0.75)
         # compute amount to translate-- move the top left into view
         (x_translate, y_translate) = (
-            (0 - b_box.xmin) + margin_left / unit_scale,
-            (0 - b_box.ymax) - margin_top / unit_scale,
+            (0 - b_box.min.X) + margin_left / unit_scale,
+            (0 - b_box.max.Y) - margin_top / unit_scale,
         )
 
         # If the user did not specify a stroke width, calculate it based on the unit scale
@@ -7759,13 +7744,13 @@ class Joint(ABC):
     # pylint doesn't see this as an abstract method and warns about different arguments in
     # derived classes
     @abstractmethod
-    def connect_to(self, other: Joint, *args, **kwargs):
+    def connect_to(self, other: Joint, *args, **kwargs):  # pragma: no cover
         """Connect Joint self by repositioning other"""
         return NotImplementedError
 
     @property
     @abstractmethod
-    def symbol(self) -> Compound:
+    def symbol(self) -> Compound:  # pragma: no cover
         """A CAD object positioned in global space to illustrate the joint"""
         return NotImplementedError
 
@@ -7784,7 +7769,7 @@ class RigidJoint(Joint):
     @property
     def symbol(self) -> Compound:
         """A CAD symbol (XYZ indicator) as bound to part"""
-        size = self.parent.bounding_box().diagonal_length() / 12
+        size = self.parent.bounding_box().diagonal / 12
         return SVG.axes(axes_scale=size).locate(
             self.parent.location * self.relative_location
         )
@@ -7836,7 +7821,7 @@ class RevoluteJoint(Joint):
     @property
     def symbol(self) -> Compound:
         """A CAD symbol representing the axis of rotation as bound to part"""
-        radius = self.parent.bounding_box().diagonal_length() / 30
+        radius = self.parent.bounding_box().diagonal / 30
 
         return Compound.make_compound(
             [
@@ -7885,7 +7870,7 @@ class RevoluteJoint(Joint):
             raise TypeError(f"other must of type RigidJoint not {type(other)}")
 
         angle = self.angular_range[0] if angle is None else angle
-        if not self.angular_range[0] <= angle <= self.angular_range[1]:
+        if angle < self.angular_range[0] or angle > self.angular_range[1]:
             raise ValueError(f"angle ({angle}) must in range of {self.angular_range}")
         self.angle = angle
         # Avoid strange rotations when angle is zero by using 360 instead
@@ -8028,7 +8013,16 @@ class LinearJoint(Joint):
             * rotation
         )
 
-        other.parent.locate(self.parent.location * joint_relative_position)
+        if isinstance(other, RevoluteJoint):
+            other_relative_location = Location(other.relative_axis.position)
+        else:
+            other_relative_location = other.relative_location
+        other.parent.locate(
+            self.parent.location
+            * joint_relative_position
+            * other_relative_location.inverse()
+        )
+
         self.connected_to = other
 
 
@@ -8065,10 +8059,10 @@ class CylindricalJoint(Joint):
             ]
         ).move(self.parent.location * self.relative_axis.to_location())
 
-    @property
-    def axis_location(self) -> Location:
-        """Current global location of joint axis"""
-        return self.parent.location * self.relative_axis.to_location()
+    # @property
+    # def axis_location(self) -> Location:
+    #     """Current global location of joint axis"""
+    #     return self.parent.location * self.relative_axis.to_location()
 
     def __init__(
         self,
@@ -8139,7 +8133,10 @@ class CylindricalJoint(Joint):
             )
         )
         other.parent.locate(
-            self.parent.location * joint_relative_position * joint_rotation
+            self.parent.location
+            * joint_relative_position
+            * joint_rotation
+            * other.relative_location.inverse()
         )
         self.connected_to = other
 
@@ -8153,8 +8150,8 @@ class BallJoint(Joint):
         label (str): joint label
         to_part (Union[Solid, Compound]): object to attach joint to
         joint_location (Location): global location of joint
-        angular_range (tuple[ tuple[float, float], tuple[float, float], tuple[float, float] ],
-            optional): X, Y, Z angle (min, max) pairs. Defaults to ((0, 360), (0, 360), (0, 360)).
+        angular_range (tuple[ tuple[float, float], tuple[float, float], tuple[float, float] ], optional):
+            X, Y, Z angle (min, max) pairs. Defaults to ((0, 360), (0, 360), (0, 360)).
         angle_reference (Plane, optional): plane relative to part defining zero degrees of
             rotation. Defaults to Plane.XY.
     """
@@ -8162,7 +8159,7 @@ class BallJoint(Joint):
     @property
     def symbol(self) -> Compound:
         """A CAD symbol representing joint as bound to part"""
-        radius = self.parent.bounding_box().diagonal_length() / 30
+        radius = self.parent.bounding_box().diagonal / 30
         circle_x = Edge.make_circle(radius, self.angle_reference)
         circle_y = Edge.make_circle(radius, self.angle_reference.rotated((90, 0, 0)))
         circle_z = Edge.make_circle(radius, self.angle_reference.rotated((0, 90, 0)))
@@ -8172,15 +8169,15 @@ class BallJoint(Joint):
                 circle_x,
                 circle_y,
                 circle_z,
-                Compound.make_2d_text("X", radius / 5, halign=Halign.CENTER).locate(
-                    circle_x.location_at(0.125) * Rotation(90, 0, 0)
-                ),
-                Compound.make_2d_text("Y", radius / 5, halign=Halign.CENTER).locate(
-                    circle_y.location_at(0.625) * Rotation(90, 0, 0)
-                ),
-                Compound.make_2d_text("Z", radius / 5, halign=Halign.CENTER).locate(
-                    circle_z.location_at(0.125) * Rotation(90, 0, 0)
-                ),
+                Compound.make_2d_text(
+                    "X", radius / 5, align=(Align.CENTER, Align.CENTER)
+                ).locate(circle_x.location_at(0.125) * Rotation(90, 0, 0)),
+                Compound.make_2d_text(
+                    "Y", radius / 5, align=(Align.CENTER, Align.CENTER)
+                ).locate(circle_y.location_at(0.625) * Rotation(90, 0, 0)),
+                Compound.make_2d_text(
+                    "Z", radius / 5, align=(Align.CENTER, Align.CENTER)
+                ).locate(circle_z.location_at(0.125) * Rotation(90, 0, 0)),
             ]
         ).move(self.parent.location * self.relative_location)
 
@@ -8194,6 +8191,17 @@ class BallJoint(Joint):
         ] = ((0, 360), (0, 360), (0, 360)),
         angle_reference: Plane = Plane.XY,
     ):
+        """_summary_
+
+        _extended_summary_
+
+        Args:
+            label (str): _description_
+            to_part (Union[Solid, Compound]): _description_
+            joint_location (Location, optional): _description_. Defaults to Location().
+            angular_range (tuple[ tuple[float, float], tuple[float, float], tuple[float, float] ], optional): _description_. Defaults to ((0, 360), (0, 360), (0, 360)).
+            angle_reference (Plane, optional): _description_. Defaults to Plane.XY.
+        """
         self.relative_location = to_part.location.inverse() * joint_location
         to_part.joints[label] = self
         self.angular_range = angular_range

@@ -26,6 +26,7 @@ license:
 
 """
 from __future__ import annotations
+import inspect
 import contextvars
 from itertools import product
 from abc import ABC, abstractmethod, abstractstaticmethod
@@ -33,14 +34,13 @@ from math import sqrt, pi
 from typing import Iterable, Union
 import logging
 from build123d.build_enums import (
+    Align,
     Select,
     Kind,
     Keep,
     Mode,
     Transition,
     FontStyle,
-    Halign,
-    Valign,
     Until,
     SortBy,
     GeomType,
@@ -85,6 +85,7 @@ CM = 10 * MM
 M = 1000 * MM
 IN = 25.4 * MM
 FT = 12 * IN
+THOU = IN / 1000
 
 
 class Builder(ABC):
@@ -93,6 +94,7 @@ class Builder(ABC):
     Base class for the build123d Builders.
 
     Args:
+        workplanes: sequence of Union[Face, Plane, Location]: set plane(s) to work on
         mode (Mode, optional): combination mode. Defaults to Mode.ADD.
     """
 
@@ -109,7 +111,7 @@ class Builder(ABC):
         self.mode = mode
         self.workplanes = workplanes
         self._reset_tok = None
-        self._parent = None
+        self.builder_parent = None
         self.last_vertices = []
         self.last_edges = []
         self.workplanes_context = None
@@ -119,7 +121,9 @@ class Builder(ABC):
     def __enter__(self):
         """Upon entering record the parent and a token to restore contextvars"""
 
-        self._parent = Builder._get_context()
+        # Only set parents from the same scope
+        parent = Builder._get_context()
+        self.builder_parent = parent if parent in locals().values() else None
         self._reset_tok = self._current.set(self)
         # If there are no workplanes, create a default XY plane
         if not self.workplanes and not WorkplaneList._get_context():
@@ -135,20 +139,13 @@ class Builder(ABC):
         """Upon exiting restore context and send object to parent"""
         self._current.reset(self._reset_tok)
 
-        if self._parent is not None:
-            logger.debug("Transferring object(s) to %s", type(self._parent).__name__)
-            if isinstance(self._obj, Iterable):
-                self._parent._add_to_context(*self._obj, mode=self.mode)
-            else:
-                self._parent._add_to_context(self._obj, mode=self.mode)
+        if self.builder_parent is not None and self.mode != Mode.PRIVATE:
+            logger.debug(
+                "Transferring object(s) to %s", type(self.builder_parent).__name__
+            )
+            self.builder_parent._add_to_context(self._obj, mode=self.mode)
 
         self.exit_workplanes = WorkplaneList._get_context().workplanes
-        # if self._obj_name == "sketch":
-        #     global_objs = [
-        #         plane.from_local_coords(self.sketch)
-        #         for plane in WorkplaneList._get_context().workplanes
-        #     ]
-        #     self.sketch = Compound.make_compound(global_objs)
 
         # Now that the object has been transferred, it's save to remove any (non-default)
         # workplanes that were created then exit
@@ -174,6 +171,11 @@ class Builder(ABC):
         """Name of object to pass to parent"""
         return NotImplementedError  # pragma: no cover
 
+    @property
+    def max_dimension(self) -> float:
+        """Maximum size of object in all directions"""
+        return self._obj.bounding_box().diagonal if self._obj else 0.0
+
     @abstractmethod
     def _add_to_context(
         self,
@@ -192,13 +194,19 @@ class Builder(ABC):
         here to avoid having to recreate this method.
         """
         result = cls._current.get(None)
+
+        logger.info(
+            "Context requested by %s",
+            type(inspect.currentframe().f_back.f_locals["self"]).__name__,
+        )
+
         if caller is not None and result is None:
             if hasattr(caller, "_applies_to"):
                 raise RuntimeError(
                     f"No valid context found, use one of {caller._applies_to}"
                 )
             else:
-                raise RuntimeError(f"No valid context found")
+                raise RuntimeError(f"No valid context found-common")
 
         return result
 
@@ -272,6 +280,23 @@ class Builder(ABC):
             face_list = self.last_faces
         return ShapeList(face_list)
 
+    def solids(self, select: Select = Select.ALL) -> ShapeList[Solid]:
+        """Return Solids
+
+        Return either all or the solids created during the last operation.
+
+        Args:
+            select (Select, optional): Solid selector. Defaults to Select.ALL.
+
+        Returns:
+            ShapeList[Solid]: Solids extracted
+        """
+        if select == Select.ALL:
+            solid_list = self._obj.solids()
+        elif select == Select.LAST:
+            solid_list = self.last_solids
+        return ShapeList(solid_list)
+
     def validate_inputs(self, validating_class, objects: Shape = None):
         """Validate that objects/operations and parameters apply"""
 
@@ -342,6 +367,7 @@ class LocationList:
     def __enter__(self):
         """Upon entering create a token to restore contextvars"""
         self._reset_tok = self._current.set(self)
+
         logger.info(
             "%s is pushing %d points: %s",
             type(self).__name__,
@@ -380,14 +406,16 @@ class LocationList:
 class HexLocations(LocationList):
     """Location Context: Hex Array
 
-    Creates a context of hexagon array of points.
+    Creates a context of hexagon array of locations for Part or Sketch. When creating
+    hex locations for an array of circles, set `apothem` to the radius of the circle
+    plus one half the spacing between the circles.
 
     Args:
-        diagonal: tip to tip size of hexagon ( must be > 0)
+        apothem: radius of the inscribed circle
         xCount: number of points ( > 0 )
         yCount: number of points ( > 0 )
-        centered: specify centering along each axis.
-        offset (VectorLike): offset to apply to all locations. Defaults to (0,0).
+        align (tuple[Align, Align], optional): align min, center, or max of object.
+            Defaults to (Align.CENTER, Align.CENTER).
 
     Raises:
         ValueError: Spacing and count must be > 0
@@ -395,18 +423,25 @@ class HexLocations(LocationList):
 
     def __init__(
         self,
-        diagonal: float,
+        apothem: float,
         x_count: int,
         y_count: int,
-        centered: tuple[bool, bool] = (True, True),
-        offset: VectorLike = (0, 0),
+        align: tuple[Align, Align] = (Align.CENTER, Align.CENTER),
     ):
+        diagonal = 4 * apothem / sqrt(3)
         x_spacing = 3 * diagonal / 4
         y_spacing = diagonal * sqrt(3) / 2
         if x_spacing <= 0 or y_spacing <= 0 or x_count < 1 or y_count < 1:
             raise ValueError("Spacing and count must be > 0 ")
 
-        points = []  # coordinates relative to bottom left point
+        self.apothem = apothem
+        self.diagonal = diagonal
+        self.x_count = x_count
+        self.y_count = y_count
+        self.align = align
+
+        # Generate the raw coordinates relative to bottom left point
+        points = ShapeList()
         for x_val in range(0, x_count, 2):
             for y_val in range(y_count):
                 points.append(
@@ -416,34 +451,44 @@ class HexLocations(LocationList):
             for y_val in range(y_count):
                 points.append(Vector(x_spacing * x_val, y_spacing * y_val + y_spacing))
 
-        # shift points down and left relative to origin if requested
-        offset = Vector(offset)
-        if centered[0]:
-            offset += Vector(-x_spacing * (x_count - 1) * 0.5, 0)
-        if centered[1]:
-            offset += Vector(0, -y_spacing * y_count * 0.5)
-        points = [x + offset for x in points]
+        # Determine the minimum point and size of the array
+        sorted_points = [points.sort_by(Axis.X), points.sort_by(Axis.Y)]
+        size = [
+            sorted_points[0][-1].X - sorted_points[0][0].X,
+            sorted_points[1][-1].Y - sorted_points[1][0].Y,
+        ]
+        min_corner = Vector(sorted_points[0][0].X, sorted_points[1][0].Y)
 
-        # convert to locations and store the reference plane
-        self.local_locations = [Location(point) for point in points]
+        # Calculate the amount to offset the array to align it
+        align_offset = []
+        for i in range(2):
+            if align[i] == Align.MIN:
+                align_offset.append(0)
+            elif align[i] == Align.CENTER:
+                align_offset.append(-size[i] / 2)
+            elif align[i] == Align.MAX:
+                align_offset.append(-size[i])
+
+        # Align the points
+        points = [point + Vector(*align_offset) - min_corner for point in points]
+
+        # Convert to locations and store the reference plane
+        local_locations = [Location(point) for point in points]
+
+        self.local_locations = Locations._move_to_existing(local_locations)
 
         super().__init__(self.local_locations)
-
-    @staticmethod
-    def calc_diagonal(radius: float, spacing: float) -> float:
-        """Calculate the size of the hex grid filled with circles at the given spacing"""
-        return 2 * (2 * radius + spacing) / sqrt(3)
 
 
 class PolarLocations(LocationList):
     """Location Context: Polar Array
 
-    Push a polar array of locations to Part or Sketch
+    Creates a context of polar array of locations for Part or Sketch
 
     Args:
         radius (float): array radius
         count (int): Number of points to push
-        start_angle (float, optional): angle to first point from +ve X axis. Deaults to 0.0.
+        start_angle (float, optional): angle to first point from +ve X axis. Defaults to 0.0.
         stop_angle (float, optional): angle to last point from +ve X axis. Defaults to 360.0.
         rotate (bool, optional): Align locations with arc tangents. Defaults to True.
 
@@ -465,55 +510,83 @@ class PolarLocations(LocationList):
         angle_step = (stop_angle - start_angle) / count
 
         # Note: rotate==False==0 so the location orientation doesn't change
-        self.local_locations = []
+        local_locations = []
         for i in range(count):
-            self.local_locations.append(
+            local_locations.append(
                 Location(
                     Vector(radius, 0).rotate(Axis.Z, start_angle + angle_step * i),
                     Vector(0, 0, 1),
                     rotate * angle_step * i,
                 )
             )
+
+        self.local_locations = Locations._move_to_existing(local_locations)
+
         super().__init__(self.local_locations)
 
 
 class Locations(LocationList):
     """Location Context: Push Points
 
-    Push sequence of locations to Part or Sketch
+    Creates a context of locations for Part or Sketch
 
     Args:
         pts (Union[VectorLike, Vertex, Location]): sequence of points to push
     """
 
     def __init__(self, *pts: Union[VectorLike, Vertex, Location]):
-        self.local_locations = []
+        local_locations = []
         for point in pts:
             if isinstance(point, Location):
-                self.local_locations.append(point)
+                local_locations.append(point)
             elif isinstance(point, Vector):
-                self.local_locations.append(Location(point))
+                local_locations.append(Location(point))
             elif isinstance(point, Vertex):
-                self.local_locations.append(Location(Vector(point.to_tuple())))
+                local_locations.append(Location(Vector(point.to_tuple())))
             elif isinstance(point, tuple):
-                self.local_locations.append(Location(Vector(point)))
+                local_locations.append(Location(Vector(point)))
             else:
                 raise ValueError(f"Locations doesn't accept type {type(point)}")
+
+        self.local_locations = Locations._move_to_existing(local_locations)
         super().__init__(self.local_locations)
+
+    @staticmethod
+    def _move_to_existing(local_locations: list[Location]) -> list[Location]:
+        """_move_to_existing
+
+        Move as a group the local locations to any existing locations  Note that existing
+        polar locations may be rotated so this rotates the group not the individuals.
+
+        Args:
+            local_locations (list[Location]): location group to move to existing locations
+
+        Returns:
+            list[Location]: group of locations moved to existing locations as a group
+        """
+        local_vertex_compound = Compound.make_compound(
+            [Face.make_rect(1, 1).locate(l) for l in local_locations]
+        )
+        location_group = []
+        for group_center in LocationList._get_context().local_locations:
+            location_group.extend(
+                [v.location for v in local_vertex_compound.moved(group_center).faces()]
+            )
+        return location_group
 
 
 class GridLocations(LocationList):
     """Location Context: Rectangular Array
 
-    Push a rectangular array of locations to Part or Sketch
+    Creates a context of rectangular array of locations for Part or Sketch
 
     Args:
         x_spacing (float): horizontal spacing
         y_spacing (float): vertical spacing
         x_count (int): number of horizontal points
         y_count (int): number of vertical points
-        centered: specify centering along each axis.
-        offset (VectorLike): offset to apply to all locations. Defaults to (0,0).
+        align (tuple[Align, Align], optional): align min, center, or max of object.
+            Defaults to (Align.CENTER, Align.CENTER).
 
     Raises:
         ValueError: Either x or y count must be greater than or equal to one.
@@ -525,8 +598,7 @@ class GridLocations(LocationList):
         y_spacing: float,
         x_count: int,
         y_count: int,
-        centered: tuple[bool, bool] = (True, True),
-        offset: VectorLike = (0, 0),
+        align: tuple[Align, Align] = (Align.CENTER, Align.CENTER),
     ):
         if x_count < 1 or y_count < 1:
             raise ValueError(
@@ -536,27 +608,32 @@ class GridLocations(LocationList):
         self.y_spacing = y_spacing
         self.x_count = x_count
         self.y_count = y_count
-        self.centered = centered
-        self.offset = Vector(offset)
+        self.align = align
 
-        center_x_offset = (
-            x_spacing * (x_count - 1) / 2 if centered[0] else 0 + self.offset.X
-        )
-        center_y_offset = (
-            y_spacing * (y_count - 1) / 2 if centered[1] else 0 + self.offset.Y
-        )
+        size = [x_spacing * (x_count - 1), y_spacing * (y_count - 1)]
+        align_offset = []
+        for i in range(2):
+            if align[i] == Align.MIN:
+                align_offset.append(0)
+            elif align[i] == Align.CENTER:
+                align_offset.append(-size[i] / 2)
+            elif align[i] == Align.MAX:
+                align_offset.append(-size[i])
 
-        self.local_locations = []
-        self.planes = []
+        # Create the list of local locations
+        local_locations = []
         for i, j in product(range(x_count), range(y_count)):
-            self.local_locations.append(
+            local_locations.append(
                 Location(
                     Vector(
-                        i * x_spacing - center_x_offset,
-                        j * y_spacing - center_y_offset,
+                        i * x_spacing + align_offset[0],
+                        j * y_spacing + align_offset[1],
                     )
                 )
             )
+
+        self.local_locations = Locations._move_to_existing(local_locations)
+        self.planes = []
         super().__init__(self.local_locations)
 
 
@@ -585,7 +662,7 @@ class WorkplaneList:
     def __enter__(self):
         """Upon entering create a token to restore contextvars"""
         self._reset_tok = self._current.set(self)
-        self.locations_context = Locations((0, 0, 0)).__enter__()
+        self.locations_context = LocationList([Location(Vector())]).__enter__()
         logger.info(
             "%s is pushing %d workplanes: %s",
             type(self).__name__,
@@ -621,6 +698,37 @@ class WorkplaneList:
         """Return the instance of the current ContextList"""
         return cls._current.get(None)
 
+    @classmethod
+    def localize(
+        cls, *points: VectorLike
+    ) -> Union[list[list(Vector)], list[Vector], Vector]:
+        """Localize a sequence of points to the active workplanes
+
+        The return value is conditional:
+        - 1 workplane, 1 point -> Vector
+        - 1 workplane, >1 points -> list[Vector]
+        - >1 workplane, 1 point -> list[Vector]
+        - >1 workplane, >1 points -> list[list[Vector]]
+        The two list[Vector] outputs are easily distinguished as the user
+        provides the points to the API.
+        """
+        points_per_workplane = []
+        for workplane in WorkplaneList._get_context().workplanes:
+            localized_pts = [
+                workplane.from_local_coords(pt) if isinstance(pt, tuple) else pt
+                for pt in points
+            ]
+            if len(localized_pts) == 1:
+                points_per_workplane.append(localized_pts[0])
+            else:
+                points_per_workplane.extend(localized_pts)
+
+        if len(points_per_workplane) == 1:
+            result = points_per_workplane[0]
+        else:
+            result = points_per_workplane
+        return result
+
 
 class Workplanes(WorkplaneList):
     """Workplane Context: Workplanes
@@ -644,3 +752,37 @@ class Workplanes(WorkplaneList):
             else:
                 raise ValueError(f"Workplanes does not accept {type(obj)}")
         super().__init__(self.workplanes)
+
+
+#
+# To avoid import loops, Vector add & sub are monkey-patched
+def _vector_add(self, vec: VectorLike) -> Vector:
+    """Mathematical addition function where tuples are localized if workplane exists"""
+    if isinstance(vec, Vector):
+        result = Vector(self.wrapped.Added(vec.wrapped))
+    elif isinstance(vec, tuple) and WorkplaneList._get_context():
+        result = Vector(self.wrapped.Added(WorkplaneList.localize(vec).wrapped))
+    elif isinstance(vec, tuple):
+        result = Vector(self.wrapped.Added(Vector(vec).wrapped))
+    else:
+        raise ValueError("Only Vectors or tuples can be added to Vectors")
+
+    return result
+
+
+def _vector_sub(self, vec: VectorLike) -> Vector:
+    """Mathematical subtraction function where tuples are localized if workplane exists"""
+    if isinstance(vec, Vector):
+        result = Vector(self.wrapped.Subtracted(vec.wrapped))
+    elif isinstance(vec, tuple) and WorkplaneList._get_context():
+        result = Vector(self.wrapped.Subtracted(WorkplaneList.localize(vec).wrapped))
+    elif isinstance(vec, tuple):
+        result = Vector(self.wrapped.Subtracted(Vector(vec).wrapped))
+    else:
+        raise ValueError("Only Vectors or tuples can be subtracted from Vectors")
+
+    return result
+
+
+Vector.add = _vector_add
+Vector.sub = _vector_sub

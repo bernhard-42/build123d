@@ -27,9 +27,9 @@ copyright = "2022, Gumyr"
 author = "Gumyr"
 
 # The full version, including alpha/beta/rc tags
-with open(os.path.join(build123d_path, "setup.cfg")) as f:
-    setup_cfg = f.readlines()
-for line in setup_cfg:
+with open(os.path.join(build123d_path, "pyproject.toml")) as f:
+    pyproject_toml = f.readlines()
+for line in pyproject_toml:
     if "version =" in line:
         release = line.split("=")[1].strip()
 
@@ -48,6 +48,8 @@ extensions = [
     "sphinx.ext.inheritance_diagram",
     "sphinx.ext.viewcode",
     "sphinx_design",
+    "sphinx_copybutton",
+    "hoverxref.extension",
 ]
 
 # Napoleon settings
@@ -102,3 +104,22 @@ html_theme = "sphinx_rtd_theme"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ["_static"]
+
+# -- Options for hoverxref -------------------------------------------------
+hoverxref_role_types = {
+    "hoverxref": "tooltip",
+    "ref": "tooltip",  # for hoverxref_auto_ref config
+    "confval": "tooltip",  # for custom object
+    "mod": "tooltip",  # for Python Sphinx Domain
+    "class": "tooltip",  # for Python Sphinx Domain
+    "meth": "tooltip",  # for Python Sphinx Domain
+}
+
+hoverxref_roles = [
+    "class",
+    "meth",
+]
+
+hoverxref_domains = [
+    "py",
+]

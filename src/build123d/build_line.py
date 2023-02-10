@@ -25,6 +25,7 @@ license:
     limitations under the License.
 
 """
+import copy
 import inspect
 from math import sin, cos, radians, degrees, atan2, sqrt, copysign
 from typing import Union, Iterable
@@ -42,7 +43,7 @@ from build123d.direct_api import (
     Face,
     Plane,
 )
-from build123d.build_common import Builder, logger
+from build123d.build_common import Builder, WorkplaneList, logger
 
 
 class BuildLine(Builder):
@@ -50,7 +51,23 @@ class BuildLine(Builder):
 
     Create lines (objects with length but not area or volume) from edges or wires.
 
+    BuildLine only works with a single workplane which is used to convert tuples
+    as inputs to global coordinates. For example:
+
+    .. code::
+
+        with BuildLine(Plane.YZ) as radius_arc:
+            RadiusArc((1, 2), (2, 1), 1)
+
+    creates an arc from global points (0, 1, 2) to (0, 2, 1). Note that points
+    entered as Vector(x, y, z) are considered global and are not localized.
+
+    The workplane is also used to define planes parallel to the workplane that
+    arcs are created on.
+
     Args:
+        workplane (Union[Face, Plane, Location], optional): plane used when local
+            coordinates are used and when creating arcs. Defaults to Plane.XY.
         mode (Mode, optional): combination mode. Defaults to Mode.ADD.
     """
 
@@ -68,17 +85,21 @@ class BuildLine(Builder):
 
     def __init__(
         self,
-        *workplanes: Union[Face, Plane, Location],
+        workplane: Union[Face, Plane, Location] = Plane.XY,
         mode: Mode = Mode.ADD,
     ):
-        self.initial_planes = workplanes
+        self.initial_plane = workplane
         self.mode = mode
         self.line: Compound = None
-        super().__init__(*workplanes, mode=mode)
+        super().__init__(workplane, mode=mode)
 
     def faces(self):
-        """Override the base Builder class definition of faces()"""
-        return NotImplementedError("faces() doesn't apply to BuildLine")
+        """faces() not implemented"""
+        raise NotImplementedError("faces() doesn't apply to BuildLine")
+
+    def solids(self):
+        """solids() not implemented"""
+        raise NotImplementedError("solids() doesn't apply to BuildLine")
 
     def wires(self, select: Select = Select.ALL) -> ShapeList[Wire]:
         """Return Wires from Line
@@ -189,7 +210,7 @@ class Bezier(Edge):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
-        polls = [Vector(p) for p in cntl_pnts]
+        polls = WorkplaneList.localize(*cntl_pnts)
         curve = Edge.make_bezier(*polls, weights=weights)
 
         context._add_to_context(curve, mode=mode)
@@ -222,29 +243,30 @@ class CenterArc(Edge):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
+        center_point = WorkplaneList.localize(center)
+        circle_workplane = copy.copy(WorkplaneList._get_context().workplanes[0])
+        circle_workplane.origin = center_point
         arc_direction = (
             AngularDirection.COUNTER_CLOCKWISE
             if arc_size > 0
             else AngularDirection.CLOCKWISE
         )
-        points = []
         if abs(arc_size) >= 360:
             arc = Edge.make_circle(
                 radius,
-                Plane(center),
+                circle_workplane,
                 start_angle=start_angle,
                 end_angle=start_angle,
                 angular_direction=arc_direction,
             )
         else:
-
-            center_point = Vector(center)
+            points = []
             points.append(
-                center_point
+                Vector(center)
                 + radius * Vector(cos(radians(start_angle)), sin(radians(start_angle)))
             )
             points.append(
-                center_point
+                Vector(center)
                 + radius
                 * Vector(
                     cos(radians(start_angle + arc_size / 2)),
@@ -252,13 +274,14 @@ class CenterArc(Edge):
                 )
             )
             points.append(
-                center_point
+                Vector(center)
                 + radius
                 * Vector(
                     cos(radians(start_angle + arc_size)),
                     sin(radians(start_angle + arc_size)),
                 )
             )
+            points = WorkplaneList.localize(*points)
             arc = Edge.make_three_point_arc(*points)
 
         context._add_to_context(arc, mode=mode)
@@ -300,75 +323,75 @@ class EllipticalStartArc(Edge):
     ) -> Edge:
 
         # Debugging incomplete
-        raise NotImplementedError
+        raise RuntimeError("Implementation incomplete")
 
-        context: BuildLine = BuildLine._get_context(self)
-        context.validate_inputs(self)
+        # context: BuildLine = BuildLine._get_context(self)
+        # context.validate_inputs(self)
 
-        # Calculate the ellipse parameters based on the SVG implementation here:
-        #   https://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
+        # # Calculate the ellipse parameters based on the SVG implementation here:
+        # #   https://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
 
-        self.start_pnt = Vector(start)
-        self.end_pnt = Vector(end)
-        # Eq. 5.1
-        self.mid_prime: Vector = ((self.start_pnt - self.end_pnt) * 0.5).rotate(
-            Axis.Z, -rotation
-        )
+        # self.start_pnt = Vector(start)
+        # self.end_pnt = Vector(end)
+        # # Eq. 5.1
+        # self.mid_prime: Vector = ((self.start_pnt - self.end_pnt) * 0.5).rotate(
+        #     Axis.Z, -rotation
+        # )
 
-        # Eq. 5.2
-        self.center_scalar = (-1 if large_arc == sweep_flag else 1) * sqrt(
-            (
-                x_radius**2 * y_radius**2
-                - x_radius**2 * (self.mid_prime.Y**2)
-                - y_radius**2 * (self.mid_prime.X**2)
-            )
-            / (
-                x_radius**2 * (self.mid_prime.Y**2)
-                + y_radius**2 * (self.mid_prime.X**2)
-            )
-        )
-        self.center_prime = (
-            Vector(
-                x_radius * self.mid_prime.Y / y_radius,
-                -y_radius * self.mid_prime.X / x_radius,
-            )
-            * self.center_scalar
-        )
+        # # Eq. 5.2
+        # self.center_scalar = (-1 if large_arc == sweep_flag else 1) * sqrt(
+        #     (
+        #         x_radius**2 * y_radius**2
+        #         - x_radius**2 * (self.mid_prime.Y**2)
+        #         - y_radius**2 * (self.mid_prime.X**2)
+        #     )
+        #     / (
+        #         x_radius**2 * (self.mid_prime.Y**2)
+        #         + y_radius**2 * (self.mid_prime.X**2)
+        #     )
+        # )
+        # self.center_prime = (
+        #     Vector(
+        #         x_radius * self.mid_prime.Y / y_radius,
+        #         -y_radius * self.mid_prime.X / x_radius,
+        #     )
+        #     * self.center_scalar
+        # )
 
-        # Eq. 5.3
-        self.center_pnt: Vector = self.center_prime.rotate(Axis.Z, rotation) + (
-            ((self.start_pnt + self.end_pnt) * 0.5)
-        )
+        # # Eq. 5.3
+        # self.center_pnt: Vector = self.center_prime.rotate(Axis.Z, rotation) + (
+        #     ((self.start_pnt + self.end_pnt) * 0.5)
+        # )
 
-        plane.set_origin2d(self.center_pnt.X, self.center_pnt.Y)
-        plane = plane.rotated((0, 0, rotation))
-        self.start_angle = (
-            plane.x_dir.get_signed_angle(self.start_pnt - self.center_pnt, plane.z_dir)
-            + 360
-        ) % 360
-        self.end_angle = (
-            plane.x_dir.get_signed_angle(self.end_pnt - self.center_pnt, plane.z_dir)
-            + 360
-        ) % 360
-        self.angular_direction = (
-            AngularDirection.COUNTER_CLOCKWISE
-            if self.start_angle > self.end_angle
-            else AngularDirection.CLOCKWISE
-        )
+        # plane.set_origin2d(self.center_pnt.X, self.center_pnt.Y)
+        # plane = plane.rotated((0, 0, rotation))
+        # self.start_angle = (
+        #     plane.x_dir.get_signed_angle(self.start_pnt - self.center_pnt, plane.z_dir)
+        #     + 360
+        # ) % 360
+        # self.end_angle = (
+        #     plane.x_dir.get_signed_angle(self.end_pnt - self.center_pnt, plane.z_dir)
+        #     + 360
+        # ) % 360
+        # self.angular_direction = (
+        #     AngularDirection.COUNTER_CLOCKWISE
+        #     if self.start_angle > self.end_angle
+        #     else AngularDirection.CLOCKWISE
+        # )
 
-        curve = Edge.make_ellipse(
-            x_radius=x_radius,
-            y_radius=y_radius,
-            plane=plane,
-            start_angle=self.start_angle,
-            end_angle=self.end_angle,
-            angular_direction=self.angular_direction,
-        )
+        # curve = Edge.make_ellipse(
+        #     x_radius=x_radius,
+        #     y_radius=y_radius,
+        #     plane=plane,
+        #     start_angle=self.start_angle,
+        #     end_angle=self.end_angle,
+        #     angular_direction=self.angular_direction,
+        # )
 
-        context._add_to_context(curve, mode=mode)
-        super().__init__(curve.wrapped)
+        # context._add_to_context(curve, mode=mode)
+        # super().__init__(curve.wrapped)
 
-        context: BuildLine = BuildLine._get_context(self)
+        # context: BuildLine = BuildLine._get_context(self)
 
 
 class EllipticalCenterArc(Edge):
@@ -400,22 +423,24 @@ class EllipticalCenterArc(Edge):
         end_angle: float = 90.0,
         rotation: float = 0.0,
         angular_direction: AngularDirection = AngularDirection.COUNTER_CLOCKWISE,
-        plane: Plane = Plane.XY,
         mode: Mode = Mode.ADD,
     ):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
-        center_pnt = Vector(center)
-        plane.set_origin2d(center_pnt.X, center_pnt.Y)
+        center_pnt = WorkplaneList.localize(center)
+        ellipse_workplane = copy.copy(WorkplaneList._get_context().workplanes[0])
+        ellipse_workplane.origin = center_pnt
         curve = Edge.make_ellipse(
             x_radius=x_radius,
             y_radius=y_radius,
-            plane=plane,
+            plane=ellipse_workplane,
             start_angle=start_angle,
             end_angle=end_angle,
             angular_direction=angular_direction,
-        ).rotate(Axis(plane.origin, plane.z_dir.to_dir()), rotation)
+        ).rotate(
+            Axis(ellipse_workplane.origin, ellipse_workplane.z_dir.to_dir()), rotation
+        )
 
         context._add_to_context(curve, mode=mode)
         super().__init__(curve.wrapped)
@@ -433,7 +458,7 @@ class Helix(Wire):
         center (VectorLike, optional): center point. Defaults to (0, 0, 0).
         direction (VectorLike, optional): direction of central axis. Defaults to (0, 0, 1).
         cone_angle (float, optional): conical angle. Defaults to 0.
-        lefhand (bool, optional): left handed helix. Defaults to False.
+        lefthand (bool, optional): left handed helix. Defaults to False.
         mode (Mode, optional): combination mode. Defaults to Mode.ADD.
     """
 
@@ -447,14 +472,15 @@ class Helix(Wire):
         center: VectorLike = (0, 0, 0),
         direction: VectorLike = (0, 0, 1),
         cone_angle: float = 0,
-        lefhand: bool = False,
+        lefthand: bool = False,
         mode: Mode = Mode.ADD,
     ):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
+        center_pnt = WorkplaneList.localize(center)
         helix = Wire.make_helix(
-            pitch, height, radius, center, direction, cone_angle, lefhand
+            pitch, height, radius, center_pnt, direction, cone_angle, lefthand
         )
         context._add_to_context(*helix.edges(), mode=mode)
         super().__init__(helix.wrapped)
@@ -470,7 +496,6 @@ class JernArc(Edge):
         tangent (VectorLike): tangent at start point
         radius (float): arc radius
         arc_size (float): arc size in degrees (negative to change direction)
-        plane (Plane, optional): plane containing arc. Defaults to Plane.XY.
         mode (Mode, optional): combination mode. Defaults to Mode.ADD.
     """
 
@@ -482,25 +507,25 @@ class JernArc(Edge):
         tangent: VectorLike,
         radius: float,
         arc_size: float,
-        plane: Plane = Plane.XY,
         mode: Mode = Mode.ADD,
     ):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
-        self.start = Vector(start)
-        start_tangent = Vector(tangent).normalized()
-        if not plane.contains(Axis(start, start_tangent)):
-            raise ValueError("plane must contain start point and tangent direction")
+        start = WorkplaneList.localize(start)
+        self.start = start
+        start_tangent = WorkplaneList.localize(tangent).normalized()
+        jern_workplane = copy.copy(WorkplaneList._get_context().workplanes[0])
+        jern_workplane.origin = start
 
         arc_direction = copysign(1.0, arc_size)
-        self.center_point = self.start + start_tangent.rotate(
-            Axis(self.start, plane.z_dir), arc_direction * 90
+        self.center_point = start + start_tangent.rotate(
+            Axis(start, jern_workplane.z_dir), arc_direction * 90
         ) * abs(radius)
-        self.end_of_arc = self.center_point + (self.start - self.center_point).rotate(
-            Axis(self.start, plane.z_dir), arc_size
+        self.end_of_arc = self.center_point + (start - self.center_point).rotate(
+            Axis(start, jern_workplane.z_dir), arc_size
         )
-        arc = Edge.make_tangent_arc(self.start, start_tangent, self.end_of_arc)
+        arc = Edge.make_tangent_arc(start, start_tangent, self.end_of_arc)
 
         context._add_to_context(arc, mode=mode)
         super().__init__(arc.wrapped)
@@ -527,6 +552,7 @@ class Line(Edge):
 
         if len(pts) != 2:
             raise ValueError("Line requires two pts")
+        pts = WorkplaneList.localize(*pts)
 
         lines_pts = [Vector(p) for p in pts]
 
@@ -564,15 +590,16 @@ class PolarLine(Edge):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
+        start = WorkplaneList.localize(start)
+
         if angle is not None:
             x_val = cos(radians(angle)) * length
             y_val = sin(radians(angle)) * length
-            new_edge = Edge.make_line(
-                Vector(start), Vector(start) + Vector(x_val, y_val, 0)
-            )
+            end = WorkplaneList.localize((x_val, y_val))
+            new_edge = Edge.make_line(start, start + end)
         elif direction is not None:
             new_edge = Edge.make_line(
-                Vector(start), Vector(start) + Vector(direction).normalized() * length
+                start, start + Vector(direction).normalized() * length
             )
         else:
             raise ValueError("Either angle or direction must be provided")
@@ -604,7 +631,7 @@ class Polyline(Wire):
         if len(pts) < 3:
             raise ValueError("polyline requires three or more pts")
 
-        lines_pts = [Vector(p) for p in pts]
+        lines_pts = WorkplaneList.localize(*pts)
 
         new_edges = [
             Edge.make_line(lines_pts[i], lines_pts[i + 1])
@@ -644,9 +671,7 @@ class RadiusArc(Edge):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
-        start = Vector(start_point)
-        end = Vector(end_point)
-
+        start, end = WorkplaneList.localize(start_point, end_point)
         # Calculate the sagitta from the radius
         length = end.sub(start).length / 2.0
         try:
@@ -690,21 +715,14 @@ class SagittaArc(Edge):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
-        start = Vector(start_point)
-        end = Vector(end_point)
+        start, end = WorkplaneList.localize(start_point, end_point)
         mid_point = (end + start) * 0.5
-
-        sagitta_vector = (end - start).normalized() * abs(sagitta)
-        if sagitta > 0:
-            sagitta_vector.X, sagitta_vector.Y = (
-                -sagitta_vector.Y,
-                sagitta_vector.X,
-            )  # Rotate sagitta_vector +90 deg
-        else:
-            sagitta_vector.X, sagitta_vector.Y = (
-                sagitta_vector.Y,
-                -sagitta_vector.X,
-            )  # Rotate sagitta_vector -90 deg
+        sagitta_workplane = copy.copy(WorkplaneList._get_context().workplanes[0])
+        sagitta_vector: Vector = (end - start).normalized() * abs(sagitta)
+        sagitta_vector = sagitta_vector.rotate(
+            Axis(sagitta_workplane.origin, sagitta_workplane.z_dir),
+            90 if sagitta > 0 else -90,
+        )
 
         sag_point = mid_point + sagitta_vector
 
@@ -740,9 +758,12 @@ class Spline(Edge):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
-        spline_pts = [Vector(pt) for pt in pts]
+        spline_pts = WorkplaneList.localize(*pts)
+
         if tangents:
-            spline_tangents = [Vector(tangent) for tangent in tangents]
+            spline_tangents = [
+                WorkplaneList.localize(tangent).normalized() for tangent in tangents
+            ]
         else:
             spline_tangents = None
 
@@ -794,10 +815,10 @@ class TangentArc(Edge):
         context: BuildLine = BuildLine._get_context(self)
         context.validate_inputs(self)
 
-        arc_pts = [Vector(p) for p in pts]
-        if len(arc_pts) != 2:
+        if len(pts) != 2:
             raise ValueError("tangent_arc requires two points")
-        arc_tangent = Vector(tangent)
+        arc_pts = WorkplaneList.localize(*pts)
+        arc_tangent = WorkplaneList.localize(tangent).normalized()
 
         point_indices = (0, -1) if tangent_from_first else (-1, 0)
         arc = Edge.make_tangent_arc(
@@ -829,7 +850,7 @@ class ThreePointArc(Edge):
 
         if len(pts) != 3:
             raise ValueError("ThreePointArc requires three points")
-        points = [Vector(p) for p in pts]
+        points = WorkplaneList.localize(*pts)
         arc = Edge.make_three_point_arc(*points)
         context._add_to_context(arc, mode=mode)
         super().__init__(arc.wrapped)

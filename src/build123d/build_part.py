@@ -10,7 +10,6 @@ desc:
 
 TODO:
 - add TwistExtrude, ProjectText
-- add centered to wedge
 
 license:
 
@@ -33,7 +32,7 @@ import inspect
 from warnings import warn
 from math import radians, tan, sqrt
 from typing import Union, Iterable
-from build123d.build_enums import Mode, Until, Select, Transition
+from build123d.build_enums import Mode, Until, Select, Transition, Align
 from build123d.direct_api import (
     Edge,
     Wire,
@@ -86,7 +85,7 @@ class BuildPart(Builder):
     @property
     def pending_edges_as_wire(self) -> Wire:
         """Return a wire representation of the pending edges"""
-        return Wire.make_wire(self.pending_edges)
+        return Wire.combine(self.pending_edges)[0]
 
     def __init__(
         self,
@@ -104,23 +103,6 @@ class BuildPart(Builder):
         self.last_solids = []
         super().__init__(*workplanes, mode=mode)
 
-    def solids(self, select: Select = Select.ALL) -> ShapeList[Solid]:
-        """Return Solids from Part
-
-        Return either all or the solids created during the last operation.
-
-        Args:
-            select (Select, optional): Solid selector. Defaults to Select.ALL.
-
-        Returns:
-            ShapeList[Solid]: Solids extracted
-        """
-        if select == Select.ALL:
-            solid_list = self.part.solids()
-        elif select == Select.LAST:
-            solid_list = self.last_solids
-        return ShapeList(solid_list)
-
     def _add_to_pending(self, *objects: Union[Edge, Face], face_plane: Plane = None):
         """Add objects to BuildPart pending lists
 
@@ -130,8 +112,9 @@ class BuildPart(Builder):
         new_faces = [o for o in objects if isinstance(o, Face)]
         for face in new_faces:
             logger.debug(
-                "Adding Face to pending_faces at %s",
+                "Adding Face to pending_faces at %s on pending_face_plane %s",
                 face.location,
+                face_plane,
             )
             self.pending_faces.append(face)
             self.pending_face_planes.append(face_plane)
@@ -238,10 +221,9 @@ class BuildPart(Builder):
             self.last_faces = list(post_faces - pre_faces)
             self.last_solids = list(post_solids - pre_solids)
 
+            self._add_to_pending(*new_edges)
             for plane in WorkplaneList._get_context().workplanes:
                 global_faces = [plane.from_local_coords(face) for face in new_faces]
-                global_edges = [plane.from_local_coords(edge) for edge in new_edges]
-                self._add_to_pending(*global_edges)
                 self._add_to_pending(*global_faces, face_plane=plane)
 
     @classmethod
@@ -264,12 +246,62 @@ class BuildPart(Builder):
         return result
 
 
+class BasePartObject(Compound):
+    """BasePartObject
+
+    Base class for all BuildPart objects & operations
+
+    Args:
+        solid (Solid): object to create
+        rotation (RotationLike, optional): angles to rotate about axes. Defaults to (0, 0, 0).
+        align (tuple[Align, Align, Align], optional): align min, center, or max of object.
+            Defaults to None.
+        mode (Mode, optional): combination mode. Defaults to Mode.ADD.
+    """
+
+    _applies_to = [BuildPart._tag()]
+
+    def __init__(
+        self,
+        solid: Solid,
+        rotation: RotationLike = (0, 0, 0),
+        align: tuple[Align, Align, Align] = None,
+        mode: Mode = Mode.ADD,
+    ):
+        context: BuildPart = BuildPart._get_context(self)
+
+        rotate = Rotation(*rotation) if isinstance(rotation, tuple) else rotation
+        self.rotation = rotate
+        self.mode = mode
+
+        if align:
+            bbox = solid.bounding_box()
+            align_offset = []
+            for i in range(3):
+                if align[i] == Align.MIN:
+                    align_offset.append(-bbox.min.to_tuple()[i])
+                elif align[i] == Align.CENTER:
+                    align_offset.append(
+                        -(bbox.min.to_tuple()[i] + bbox.max.to_tuple()[i]) / 2
+                    )
+                elif align[i] == Align.MAX:
+                    align_offset.append(-bbox.max.to_tuple()[i])
+            solid.move(Location(Vector(*align_offset)))
+
+        new_solids = [
+            solid.moved(location * rotate)
+            for location in LocationList._get_context().locations
+        ]
+        context._add_to_context(*new_solids, mode=mode)
+        super().__init__(Compound.make_compound(new_solids).wrapped)
+
+
 #
 # Operations
 #
 
 
-class CounterBoreHole(Compound):
+class CounterBoreHole(BasePartObject):
     """Part Operation: Counter Bore Hole
 
     Create a counter bore hole in part.
@@ -298,36 +330,22 @@ class CounterBoreHole(Compound):
         self.radius = radius
         self.counter_bore_radius = counter_bore_radius
         self.counter_bore_depth = counter_bore_depth
-        self.hole_depth = depth
+        self.hole_depth = depth if depth else context.max_dimension
         self.mode = mode
 
-        new_solids = []
-        for location in LocationList._get_context().locations:
-            hole_depth = (
-                context.part.fuse(Solid.make_box(1, 1, 1).locate(location))
-                .bounding_box()
-                .diagonal_length()
-                if not depth
-                else depth
+        solid = Solid.make_cylinder(
+            radius, self.hole_depth, Plane(origin=(0, 0, 0), z_dir=(0, 0, -1))
+        ).fuse(
+            Solid.make_cylinder(
+                counter_bore_radius,
+                counter_bore_depth + self.hole_depth,
+                Plane((0, 0, -counter_bore_depth)),
             )
-            new_solids.append(
-                Solid.make_cylinder(
-                    radius, hole_depth, Plane(origin=(0, 0, 0), z_dir=(0, 0, -1))
-                )
-                .fuse(
-                    Solid.make_cylinder(
-                        counter_bore_radius,
-                        counter_bore_depth + hole_depth,
-                        Plane((0, 0, -counter_bore_depth)),
-                    )
-                )
-                .locate(location)
-            )
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+        )
+        super().__init__(solid=solid, rotation=(0, 0, 0), mode=mode)
 
 
-class CounterSinkHole(Compound):
+class CounterSinkHole(BasePartObject):
     """Part Operation: Counter Sink Hole
 
     Create a counter sink hole in part.
@@ -355,37 +373,23 @@ class CounterSinkHole(Compound):
 
         self.radius = radius
         self.counter_sink_radius = counter_sink_radius
-        self.hole_depth = depth
+        self.hole_depth = depth if depth else context.max_dimension
         self.counter_sink_angle = counter_sink_angle
         self.mode = mode
+        cone_height = counter_sink_radius / tan(radians(counter_sink_angle / 2.0))
 
-        new_solids = []
-        for location in LocationList._get_context().locations:
-            hole_depth = (
-                context.part.fuse(Solid.make_box(1, 1, 1).locate(location))
-                .bounding_box()
-                .diagonal_length()
-                if not depth
-                else depth
-            )
-            cone_height = counter_sink_radius / tan(radians(counter_sink_angle / 2.0))
-            new_solids.append(
-                Solid.make_cylinder(
-                    radius, hole_depth, Plane(origin=(0, 0, 0), z_dir=(0, 0, -1))
-                )
-                .fuse(
-                    Solid.make_cone(
-                        counter_sink_radius,
-                        0.0,
-                        cone_height,
-                        Plane(origin=(0, 0, 0), z_dir=(0, 0, -1)),
-                    )
-                )
-                .fuse(Solid.make_cylinder(counter_sink_radius, hole_depth))
-                .locate(location)
-            )
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+        solid = Solid.make_cylinder(
+            radius, self.hole_depth, Plane(origin=(0, 0, 0), z_dir=(0, 0, -1))
+        ).fuse(
+            Solid.make_cone(
+                counter_sink_radius,
+                0.0,
+                cone_height,
+                Plane(origin=(0, 0, 0), z_dir=(0, 0, -1)),
+            ),
+            Solid.make_cylinder(counter_sink_radius, self.hole_depth),
+        )
+        super().__init__(solid=solid, rotation=(0, 0, 0), mode=mode)
 
 
 class Extrude(Compound):
@@ -473,7 +477,7 @@ class Extrude(Compound):
         super().__init__(Compound.make_compound(new_solids).wrapped)
 
 
-class Hole(Compound):
+class Hole(BasePartObject):
     """Part Operation: Hole
 
     Create a hole in part.
@@ -496,31 +500,23 @@ class Hole(Compound):
         context.validate_inputs(self)
 
         self.radius = radius
-        self.hole_depth = depth
+        self.hole_depth = 2 * depth if depth else 2 * context.max_dimension
         self.mode = mode
 
         # To ensure the hole will go all the way through the part when
         # no depth is specified, calculate depth based on the part and
         # hole location. In this case start the hole above the part
         # and go all the way through.
-        new_solids = []
-        for location in LocationList._get_context().locations:
-            hole_depth = (
-                2
-                * context.part.fuse(Solid.make_box(1, 1, 1).locate(location))
-                .bounding_box()
-                .diagonal_length()
-                if not depth
-                else depth
-            )
-            hole_start = (0, 0, hole_depth / 2) if not depth else (0, 0, 0)
-            new_solids.append(
-                Solid.make_cylinder(
-                    radius, hole_depth, Plane(origin=hole_start, z_dir=(0, 0, -1)), 360
-                ).locate(location)
-            )
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+        hole_start = (0, 0, self.hole_depth / 2) if not depth else (0, 0, 0)
+        solid = Solid.make_cylinder(
+            radius, self.hole_depth, Plane(origin=hole_start, z_dir=(0, 0, -1))
+        )
+        super().__init__(
+            solid=solid,
+            align=(Align.CENTER, Align.CENTER, Align.CENTER),
+            rotation=(0, 0, 0),
+            mode=mode,
+        )
 
 
 class Loft(Solid):
@@ -665,7 +661,7 @@ class Section(Compound):
         self.section_height = height
         self.mode = mode
 
-        max_size = context.part.bounding_box().diagonal_length()
+        max_size = context.part.bounding_box().diagonal
 
         section_planes = (
             section_by if section_by else WorkplaneList._get_context().workplanes
@@ -731,6 +727,7 @@ class Sweep(Compound):
 
         if path is None:
             path_wire = context.pending_edges_as_wire
+            context.pending_edges = []
         else:
             path_wire = Wire.make_wire([path]) if isinstance(path, Edge) else path
 
@@ -776,7 +773,7 @@ class Sweep(Compound):
 #
 
 
-class Box(Compound):
+class Box(BasePartObject):
     """Part Object: Box
 
     Create a box(es) and combine with part.
@@ -786,8 +783,8 @@ class Box(Compound):
         width (float): box size
         height (float): box size
         rotation (RotationLike, optional): angles to rotate about axes. Defaults to (0, 0, 0).
-        centered (tuple[bool, bool, bool], optional): center about axes.
-            Defaults to (True, True, True).
+        align (tuple[Align, Align, Align], optional): align min, center, or max of object.
+            Defaults to (Align.CENTER, Align.CENTER, Align.CENTER).
         mode (Mode, optional): combine mode. Defaults to Mode.ADD.
     """
 
@@ -799,37 +796,22 @@ class Box(Compound):
         width: float,
         height: float,
         rotation: RotationLike = (0, 0, 0),
-        centered: tuple[bool, bool, bool] = (True, True, True),
+        align: tuple[Align, Align, Align] = (Align.CENTER, Align.CENTER, Align.CENTER),
         mode: Mode = Mode.ADD,
     ):
         context: BuildPart = BuildPart._get_context(self)
         context.validate_inputs(self)
 
-        rotate = Rotation(*rotation) if isinstance(rotation, tuple) else rotation
-
         self.length = length
         self.width = width
         self.box_height = height
-        self.rotation = rotate
-        self.centered = centered
-        self.mode = mode
 
-        center_offset = Vector(
-            -length / 2 if centered[0] else 0,
-            -width / 2 if centered[1] else 0,
-            -height / 2 if centered[2] else 0,
-        )
-        new_solids = [
-            Solid.make_box(length, width, height, Plane(center_offset)).locate(
-                location * rotate
-            )
-            for location in LocationList._get_context().locations
-        ]
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+        solid = Solid.make_box(length, width, height)
+
+        super().__init__(solid=solid, rotation=rotation, align=align, mode=mode)
 
 
-class Cone(Compound):
+class Cone(BasePartObject):
     """Part Object: Cone
 
     Create a cone(s) and combine with part.
@@ -840,8 +822,8 @@ class Cone(Compound):
         height (float): cone size
         arc_size (float, optional): angular size of cone. Defaults to 360.
         rotation (RotationLike, optional): angles to rotate about axes. Defaults to (0, 0, 0).
-        centered (tuple[bool, bool, bool], optional): center about axes.
-            Defaults to (True, True, True).
+        align (tuple[Align, Align, Align], optional): align min, center, or max of object.
+            Defaults to (Align.CENTER, Align.CENTER, Align.CENTER).
         mode (Mode, optional): combine mode. Defaults to Mode.ADD.
     """
 
@@ -854,42 +836,29 @@ class Cone(Compound):
         height: float,
         arc_size: float = 360,
         rotation: RotationLike = (0, 0, 0),
-        centered: tuple[bool, bool, bool] = (True, True, True),
+        align: tuple[Align, Align, Align] = (Align.CENTER, Align.CENTER, Align.CENTER),
         mode: Mode = Mode.ADD,
     ):
         context: BuildPart = BuildPart._get_context(self)
         context.validate_inputs(self)
 
-        rotate = Rotation(*rotation) if isinstance(rotation, tuple) else rotation
-
         self.bottom_radius = bottom_radius
         self.top_radius = top_radius
         self.cone_height = height
         self.arc_size = arc_size
-        self.rotation = rotate
-        self.centered = centered
-        self.mode = mode
+        self.align = align
 
-        center_offset = Vector(
-            0 if centered[0] else max(bottom_radius, top_radius),
-            0 if centered[1] else max(bottom_radius, top_radius),
-            -height / 2 if centered[2] else 0,
+        solid = Solid.make_cone(
+            bottom_radius,
+            top_radius,
+            height,
+            angle=arc_size,
         )
-        new_solids = [
-            Solid.make_cone(
-                bottom_radius,
-                top_radius,
-                height,
-                Plane(center_offset),
-                arc_size,
-            ).locate(location * rotate)
-            for location in LocationList._get_context().locations
-        ]
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+
+        super().__init__(solid=solid, rotation=rotation, align=align, mode=mode)
 
 
-class Cylinder(Compound):
+class Cylinder(BasePartObject):
     """Part Object: Cylinder
 
     Create a cylinder(s) and combine with part.
@@ -899,8 +868,8 @@ class Cylinder(Compound):
         height (float): cylinder size
         arc_size (float, optional): angular size of cone. Defaults to 360.
         rotation (RotationLike, optional): angles to rotate about axes. Defaults to (0, 0, 0).
-        centered (tuple[bool, bool, bool], optional): center about axes.
-            Defaults to (True, True, True).
+        align (tuple[Align, Align, Align], optional): align min, center, or max of object.
+            Defaults to (Align.CENTER, Align.CENTER, Align.CENTER).
         mode (Mode, optional): combine mode. Defaults to Mode.ADD.
     """
 
@@ -912,40 +881,26 @@ class Cylinder(Compound):
         height: float,
         arc_size: float = 360,
         rotation: RotationLike = (0, 0, 0),
-        centered: tuple[bool, bool, bool] = (True, True, True),
+        align: tuple[Align, Align, Align] = (Align.CENTER, Align.CENTER, Align.CENTER),
         mode: Mode = Mode.ADD,
     ):
         context: BuildPart = BuildPart._get_context(self)
         context.validate_inputs(self)
 
-        rotate = Rotation(*rotation) if isinstance(rotation, tuple) else rotation
-
         self.radius = radius
         self.cylinder_height = height
         self.arc_size = arc_size
-        self.rotation = rotate
-        self.centered = centered
-        self.mode = mode
+        self.align = align
 
-        center_offset = Vector(
-            0 if centered[0] else radius,
-            0 if centered[1] else radius,
-            -height / 2 if centered[2] else 0,
+        solid = Solid.make_cylinder(
+            radius,
+            height,
+            angle=arc_size,
         )
-        new_solids = [
-            Solid.make_cylinder(
-                radius,
-                height,
-                Plane(center_offset),
-                arc_size,
-            ).locate(location * rotate)
-            for location in LocationList._get_context().locations
-        ]
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+        super().__init__(solid=solid, rotation=rotation, align=align, mode=mode)
 
 
-class Sphere(Compound):
+class Sphere(BasePartObject):
     """Part Object: Sphere
 
     Create a sphere(s) and combine with part.
@@ -956,8 +911,8 @@ class Sphere(Compound):
         arc_size2 (float, optional): angular size of sphere. Defaults to 90.
         arc_size3 (float, optional): angular size of sphere. Defaults to 360.
         rotation (RotationLike, optional): angles to rotate about axes. Defaults to (0, 0, 0).
-        centered (tuple[bool, bool, bool], optional): center about axes.
-            Defaults to (True, True, True).
+        align (tuple[Align, Align, Align], optional): align min, center, or max of object.
+            Defaults to (Align.CENTER, Align.CENTER, Align.CENTER).
         mode (Mode, optional): combine mode. Defaults to Mode.ADD.
     """
 
@@ -970,42 +925,28 @@ class Sphere(Compound):
         arc_size2: float = 90,
         arc_size3: float = 360,
         rotation: RotationLike = (0, 0, 0),
-        centered: tuple[bool, bool, bool] = (True, True, True),
+        align: tuple[Align, Align, Align] = (Align.CENTER, Align.CENTER, Align.CENTER),
         mode: Mode = Mode.ADD,
     ):
         context: BuildPart = BuildPart._get_context(self)
         context.validate_inputs(self)
 
-        rotate = Rotation(*rotation) if isinstance(rotation, tuple) else rotation
-
         self.radius = radius
         self.arc_size1 = arc_size1
         self.arc_size2 = arc_size2
         self.arc_size3 = arc_size3
-        self.rotation = rotate
-        self.centered = centered
-        self.mode = mode
+        self.align = align
 
-        center_offset = Vector(
-            0 if centered[0] else radius,
-            0 if centered[1] else radius,
-            0 if centered[2] else radius,
+        solid = Solid.make_sphere(
+            radius,
+            angle1=arc_size1,
+            angle2=arc_size2,
+            angle3=arc_size3,
         )
-        new_solids = [
-            Solid.make_sphere(
-                radius,
-                Plane(origin=center_offset),
-                arc_size1,
-                arc_size2,
-                arc_size3,
-            ).locate(location * rotate)
-            for location in LocationList._get_context().locations
-        ]
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+        super().__init__(solid=solid, rotation=rotation, align=align, mode=mode)
 
 
-class Torus(Compound):
+class Torus(BasePartObject):
     """Part Object: Torus
 
     Create a torus(es) and combine with part.
@@ -1017,8 +958,8 @@ class Torus(Compound):
         major_arc_size (float, optional): angular size of torus. Defaults to 0.
         minor_arc_size (float, optional): angular size or torus. Defaults to 360.
         rotation (RotationLike, optional): angles to rotate about axes. Defaults to (0, 0, 0).
-        centered (tuple[bool, bool, bool], optional): center about axes.
-            Defaults to (True, True, True).
+        align (tuple[Align, Align, Align], optional): align min, center, or max of object.
+            Defaults to (Align.CENTER, Align.CENTER, Align.CENTER).
         mode (Mode, optional): combine mode. Defaults to Mode.ADD.
     """
 
@@ -1032,44 +973,30 @@ class Torus(Compound):
         minor_end_angle: float = 360,
         major_angle: float = 360,
         rotation: RotationLike = (0, 0, 0),
-        centered: tuple[bool, bool, bool] = (True, True, True),
+        align: tuple[Align, Align, Align] = (Align.CENTER, Align.CENTER, Align.CENTER),
         mode: Mode = Mode.ADD,
     ):
         context: BuildPart = BuildPart._get_context(self)
         context.validate_inputs(self)
-
-        rotate = Rotation(*rotation) if isinstance(rotation, tuple) else rotation
 
         self.major_radius = major_radius
         self.minor_radius = minor_radius
         self.minor_start_angle = minor_start_angle
         self.minor_end_angle = minor_end_angle
         self.major_angle = major_angle
-        self.rotation = rotate
-        self.centered = centered
-        self.mode = mode
+        self.align = align
 
-        center_offset = Vector(
-            0 if centered[0] else major_radius + minor_radius,
-            0 if centered[1] else major_radius + minor_radius,
-            0 if centered[2] else minor_radius,
+        solid = Solid.make_torus(
+            major_radius,
+            minor_radius,
+            start_angle=minor_start_angle,
+            end_angle=minor_end_angle,
+            major_angle=major_angle,
         )
-        new_solids = [
-            Solid.make_torus(
-                major_radius,
-                minor_radius,
-                Plane(center_offset),
-                minor_start_angle,
-                minor_end_angle,
-                major_angle,
-            ).locate(location * rotate)
-            for location in LocationList._get_context().locations
-        ]
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+        super().__init__(solid=solid, rotation=rotation, align=align, mode=mode)
 
 
-class Wedge(Compound):
+class Wedge(BasePartObject):
     """Part Object: Wedge
 
     Create a wedge(s) and combine with part.
@@ -1083,6 +1010,8 @@ class Wedge(Compound):
         xmax (float): maximum X location
         zmax (float): maximum Z location
         rotation (RotationLike, optional): angles to rotate about axes. Defaults to (0, 0, 0).
+        align (tuple[Align, Align, Align], optional): align min, center, or max of object.
+            Defaults to (Align.CENTER, Align.CENTER, Align.CENTER).
         mode (Mode, optional): combine mode. Defaults to Mode.ADD.
     """
 
@@ -1098,12 +1027,11 @@ class Wedge(Compound):
         xmax: float,
         zmax: float,
         rotation: RotationLike = (0, 0, 0),
+        align: tuple[Align, Align, Align] = (Align.CENTER, Align.CENTER, Align.CENTER),
         mode: Mode = Mode.ADD,
     ):
         context: BuildPart = BuildPart._get_context(self)
         context.validate_inputs(self)
-
-        rotate = Rotation(*rotation) if isinstance(rotation, tuple) else rotation
 
         self.dx = dx
         self.dy = dy
@@ -1112,14 +1040,7 @@ class Wedge(Compound):
         self.zmin = zmin
         self.xmax = xmax
         self.zmax = zmax
-        self.rotation = rotate
-        self.mode = mode
+        self.align = align
 
-        new_solids = [
-            Solid.make_wedge(dx, dy, dz, xmin, zmin, xmax, zmax).moved(
-                location * rotate
-            )
-            for location in LocationList._get_context().locations
-        ]
-        context._add_to_context(*new_solids, mode=mode)
-        super().__init__(Compound.make_compound(new_solids).wrapped)
+        solid = Solid.make_wedge(dx, dy, dz, xmin, zmin, xmax, zmax)
+        super().__init__(solid=solid, rotation=rotation, align=align, mode=mode)

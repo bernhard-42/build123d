@@ -54,6 +54,7 @@ from build123d import (
     BuildPart,
     Builder,
     LocationList,
+    WorkplaneList,
 )
 
 logging.getLogger("build123d").addHandler(logging.NullHandler())
@@ -104,29 +105,45 @@ class Add(Compound):
                 else rotation
             )
             objects = [obj.moved(rotate) for obj in objects]
+            new_edges = [obj for obj in objects if isinstance(obj, Edge)]
+            new_wires = [obj for obj in objects if isinstance(obj, Wire)]
             new_faces = [obj for obj in objects if isinstance(obj, Face)]
             new_solids = [obj for obj in objects if isinstance(obj, Solid)]
             for compound in filter(lambda o: isinstance(o, Compound), objects):
+                new_edges.extend(compound.get_type(Edge))
+                new_wires.extend(compound.get_type(Wire))
                 new_faces.extend(compound.get_type(Face))
                 new_solids.extend(compound.get_type(Solid))
-            new_objects = [obj for obj in objects if isinstance(obj, Edge)]
-            for new_wires in filter(lambda o: isinstance(o, Wire), objects):
-                new_objects.extend(new_wires.edges())
+            for new_wire in new_wires:
+                new_edges.extend(new_wire.edges())
 
-            # Add to pending faces and edges
-            for face in new_faces:
-                context._add_to_pending(face, face_plane=Plane(face.to_pln()))
-            context._add_to_pending(*new_objects)
+            # Add the pending Edges in one group
+            located_edges = [
+                edge.moved(location)
+                for edge in new_edges
+                for location in LocationList._get_context().locations
+            ]
+            context._add_to_pending(*located_edges)
+            new_objects = located_edges
 
-            # Can't use get_and_clear_locations because the solid needs to be
-            # oriented to the workplane after being moved to a local location
-            new_objects = [
+            # Add to pending Faces batched by workplane
+            for workplane in WorkplaneList._get_context().workplanes:
+                faces_per_workplane = []
+                for location in LocationList._get_context().locations:
+                    for face in new_faces:
+                        faces_per_workplane.append(face.moved(location))
+                context._add_to_pending(*faces_per_workplane, face_plane=workplane)
+                new_objects.extend(faces_per_workplane)
+
+            # Add to context Solids
+            located_solids = [
                 solid.moved(location)
                 for solid in new_solids
                 for location in LocationList._get_context().locations
             ]
-            context.locations = [Location(Vector())]
-            context._add_to_context(*new_objects, mode=mode)
+            context._add_to_context(*located_solids, mode=mode)
+            new_objects.extend(located_solids)
+
         elif isinstance(context, (BuildLine, BuildSketch)):
             rotation_angle = rotation if isinstance(rotation, (int, float)) else 0.0
             new_objects = []
@@ -134,14 +151,11 @@ class Add(Compound):
                 new_objects.extend(
                     [
                         obj.rotate(Axis.Z, rotation_angle).moved(location)
-                        for location in LocationList._get_context().locations
+                        for location in LocationList._get_context().local_locations
                     ]
                 )
             context._add_to_context(*new_objects, mode=mode)
-        else:
-            raise RuntimeError(
-                f"Add does not support builder {context.__class__.__name__}"
-            )
+
         super().__init__(Compound.make_compound(new_objects).wrapped)
 
 
@@ -180,11 +194,11 @@ class BoundingBox(Compound):
                 bounding_box = obj.bounding_box()
                 new_objects.append(
                     Solid.make_box(
-                        bounding_box.xlen,
-                        bounding_box.ylen,
-                        bounding_box.zlen,
+                        bounding_box.size.X,
+                        bounding_box.size.Y,
+                        bounding_box.size.Z,
                         Plane(
-                            (bounding_box.xmin, bounding_box.ymin, bounding_box.zmin)
+                            (bounding_box.min.X, bounding_box.min.Y, bounding_box.min.Z)
                         ),
                     )
                 )
@@ -198,11 +212,11 @@ class BoundingBox(Compound):
                     continue
                 bounding_box = obj.bounding_box()
                 vertices = [
-                    (bounding_box.xmin, bounding_box.ymin),
-                    (bounding_box.xmin, bounding_box.ymax),
-                    (bounding_box.xmax, bounding_box.ymax),
-                    (bounding_box.xmax, bounding_box.ymin),
-                    (bounding_box.xmin, bounding_box.ymin),
+                    (bounding_box.min.X, bounding_box.min.Y),
+                    (bounding_box.min.X, bounding_box.max.Y),
+                    (bounding_box.max.X, bounding_box.max.Y),
+                    (bounding_box.max.X, bounding_box.min.Y),
+                    (bounding_box.min.X, bounding_box.min.Y),
                 ]
                 new_faces.append(
                     Face.make_from_wires(
@@ -212,11 +226,6 @@ class BoundingBox(Compound):
             for face in new_faces:
                 context._add_to_context(face, mode=mode)
             super().__init__(Compound.make_compound(new_faces).wrapped)
-
-        else:
-            raise RuntimeError(
-                f"BoundingBox does not support builder {context.__class__.__name__}"
-            )
 
 
 class Chamfer(Compound):
@@ -230,6 +239,11 @@ class Chamfer(Compound):
         objects (Union[Edge,Vertex]): sequence of edges or vertices to chamfer
         length (float): chamfer size
         length2 (float, optional): asymmetric chamfer size. Defaults to None.
+
+    Raises:
+        ValueError: objects must be Edges
+        ValueError: objects must be Vertices
+        RuntimeError: Builder not supported
     """
 
     _applies_to = [BuildPart._tag(), BuildSketch._tag()]
@@ -241,10 +255,14 @@ class Chamfer(Compound):
         context.validate_inputs(self, objects)
 
         if isinstance(context, BuildPart):
+            if not all([isinstance(obj, Edge) for obj in objects]):
+                raise ValueError("BuildPart Chamfer operation takes only Edges")
             new_part = context.part.chamfer(length, length2, list(objects))
             context._add_to_context(new_part, mode=Mode.REPLACE)
             super().__init__(new_part.wrapped)
         elif isinstance(context, BuildSketch):
+            if not all([isinstance(obj, Vertex) for obj in objects]):
+                raise ValueError("BuildSketch Chamfer operation takes only Vertices")
             new_faces = []
             for face in context.faces():
                 vertices_in_face = [v for v in face.vertices() if v in objects]
@@ -255,10 +273,6 @@ class Chamfer(Compound):
             new_sketch = Compound.make_compound(new_faces)
             context._add_to_context(new_sketch, mode=Mode.REPLACE)
             super().__init__(new_sketch.wrapped)
-        else:
-            raise RuntimeError(
-                f"Chamfer does not support builder {context.__class__.__name__}"
-            )
 
 
 class Fillet(Compound):
@@ -271,6 +285,11 @@ class Fillet(Compound):
     Args:
         objects (Union[Edge,Vertex]): sequence of edges or vertices to fillet
         radius (float): fillet size - must be less than 1/2 local width
+
+    Raises:
+        ValueError: objects must be Edges
+        ValueError: objects must be Vertices
+        RuntimeError: Builder not supported
     """
 
     _applies_to = [BuildPart._tag(), BuildSketch._tag()]
@@ -280,10 +299,14 @@ class Fillet(Compound):
         context.validate_inputs(self, objects)
 
         if isinstance(context, BuildPart):
+            if not all([isinstance(obj, Edge) for obj in objects]):
+                raise ValueError("BuildPart Fillet operation takes only Edges")
             new_part = context.part.fillet(radius, list(objects))
             context._add_to_context(new_part, mode=Mode.REPLACE)
             super().__init__(new_part.wrapped)
         elif isinstance(context, BuildSketch):
+            if not all([isinstance(obj, Vertex) for obj in objects]):
+                raise ValueError("BuildSketch Fillet operation takes only Vertices")
             new_faces = []
             for face in context.faces():
                 vertices_in_face = [v for v in face.vertices() if v in objects]
@@ -294,10 +317,6 @@ class Fillet(Compound):
             new_sketch = Compound.make_compound(new_faces)
             context._add_to_context(new_sketch, mode=Mode.REPLACE)
             super().__init__(new_sketch.wrapped)
-        else:
-            raise RuntimeError(
-                f"Fillet does not support builder {context.__class__.__name__}"
-            )
 
 
 class Mirror(Compound):
@@ -419,7 +438,7 @@ class Offset(Compound):
             else:
                 openings_in_this_solid = []
             new_solids.append(
-                solid.shell(openings_in_this_solid, amount, kind=kind).fix()
+                solid.offset_3d(openings_in_this_solid, amount, kind=kind).fix()
             )
 
         new_objects = new_wires + new_faces + new_solids
@@ -538,7 +557,7 @@ class Split(Compound):
 
         new_objects = []
         for obj in objects:
-            max_size = obj.bounding_box().diagonal_length()
+            max_size = obj.bounding_box().diagonal
 
             cutters = []
             if keep == Keep.BOTH:
