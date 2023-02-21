@@ -29,21 +29,14 @@ from __future__ import annotations
 import inspect
 import contextvars
 from itertools import product
-from abc import ABC, abstractmethod, abstractstaticmethod
-from math import sqrt, pi
+from abc import ABC, abstractmethod
+from math import sqrt
 from typing import Iterable, Union
 import logging
 from build123d.build_enums import (
     Align,
     Select,
-    Kind,
-    Keep,
     Mode,
-    Transition,
-    FontStyle,
-    Until,
-    SortBy,
-    GeomType,
 )
 
 from build123d.direct_api import (
@@ -59,7 +52,6 @@ from build123d.direct_api import (
     Shape,
     Vertex,
     Plane,
-    Shell,
     ShapeList,
 )
 
@@ -112,8 +104,10 @@ class Builder(ABC):
         self.workplanes = workplanes
         self._reset_tok = None
         self.builder_parent = None
-        self.last_vertices = []
-        self.last_edges = []
+        self.last_vertices: ShapeList[Vertex] = ShapeList()
+        self.last_edges: ShapeList[Edge] = ShapeList()
+        self.last_faces: ShapeList[Face] = ShapeList()
+        self.last_solids: ShapeList[Solid] = ShapeList()
         self.workplanes_context = None
         self.active: bool = False  # is the builder context active
         self.exit_workplanes = None
@@ -156,20 +150,22 @@ class Builder(ABC):
 
         logger.info("Exiting %s", type(self).__name__)
 
-    @abstractstaticmethod
+    @staticmethod
+    @abstractmethod
     def _tag() -> str:
         """Class (possibly subclass) name"""
-        return NotImplementedError  # pragma: no cover
+        raise NotImplementedError  # pragma: no cover
 
+    @property
     @abstractmethod
     def _obj(self) -> Shape:
         """Object to pass to parent"""
-        return NotImplementedError  # pragma: no cover
+        raise NotImplementedError  # pragma: no cover
 
     @abstractmethod
     def _obj_name(self) -> str:
         """Name of object to pass to parent"""
-        return NotImplementedError  # pragma: no cover
+        raise NotImplementedError  # pragma: no cover
 
     @property
     def max_dimension(self) -> float:
@@ -205,8 +201,7 @@ class Builder(ABC):
                 raise RuntimeError(
                     f"No valid context found, use one of {caller._applies_to}"
                 )
-            else:
-                raise RuntimeError(f"No valid context found-common")
+            raise RuntimeError("No valid context found-common")
 
         return result
 
@@ -221,7 +216,7 @@ class Builder(ABC):
         Returns:
             VertexList[Vertex]: Vertices extracted
         """
-        vertex_list = []
+        vertex_list: list[Vertex] = []
         if select == Select.ALL:
             for edge in self._obj.edges():
                 vertex_list.extend(edge.vertices())
@@ -297,7 +292,7 @@ class Builder(ABC):
             solid_list = self.last_solids
         return ShapeList(solid_list)
 
-    def validate_inputs(self, validating_class, objects: Shape = None):
+    def validate_inputs(self, validating_class, objects: Iterable[Shape] = None):
         """Validate that objects/operations and parameters apply"""
 
         if not objects:
@@ -390,12 +385,11 @@ class LocationList:
 
     def __next__(self):
         """While not through all the locations, return the next one"""
-        if self.location_index < len(self.locations):
-            result = self.locations[self.location_index]
-            self.location_index += 1
-            return result
-        else:
+        if self.location_index >= len(self.locations):
             raise StopIteration
+        result = self.locations[self.location_index]
+        self.location_index += 1
+        return result
 
     @classmethod
     def _get_context(cls):
@@ -441,7 +435,7 @@ class HexLocations(LocationList):
         self.align = align
 
         # Generate the raw coordinates relative to bottom left point
-        points = ShapeList()
+        points = ShapeList[Vector]()
         for x_val in range(0, x_count, 2):
             for y_val in range(y_count):
                 points.append(
@@ -470,7 +464,9 @@ class HexLocations(LocationList):
                 align_offset.append(-size[i])
 
         # Align the points
-        points = [point + Vector(*align_offset) - min_corner for point in points]
+        points = ShapeList(
+            [point + Vector(*align_offset) - min_corner for point in points]
+        )
 
         # Convert to locations and store the reference plane
         local_locations = [Location(point) for point in points]
@@ -614,7 +610,7 @@ class GridLocations(LocationList):
         align_offset = []
         for i in range(2):
             if align[i] == Align.MIN:
-                align_offset.append(0)
+                align_offset.append(0.0)
             elif align[i] == Align.CENTER:
                 align_offset.append(-size[i] / 2)
             elif align[i] == Align.MAX:
@@ -633,7 +629,7 @@ class GridLocations(LocationList):
             )
 
         self.local_locations = Locations._move_to_existing(local_locations)
-        self.planes = []
+        self.planes: list[Plane] = []
         super().__init__(self.local_locations)
 
 
@@ -686,12 +682,11 @@ class WorkplaneList:
 
     def __next__(self):
         """While not through all the workplanes, return the next one"""
-        if self.plane_index < len(self.workplanes):
-            result = self.workplanes[self.plane_index]
-            self.plane_index += 1
-            return result
-        else:
+        if self.plane_index >= len(self.workplanes):
             raise StopIteration
+        result = self.workplanes[self.plane_index]
+        self.plane_index += 1
+        return result
 
     @classmethod
     def _get_context(cls):
@@ -699,29 +694,24 @@ class WorkplaneList:
         return cls._current.get(None)
 
     @classmethod
-    def localize(
-        cls, *points: VectorLike
-    ) -> Union[list[list(Vector)], list[Vector], Vector]:
-        """Localize a sequence of points to the active workplanes
+    def localize(cls, *points: VectorLike) -> Union[list[Vector], Vector]:
+        """Localize a sequence of points to the active workplane
+        (only used by BuildLine where there is only one active workplane)
 
         The return value is conditional:
-        - 1 workplane, 1 point -> Vector
-        - 1 workplane, >1 points -> list[Vector]
-        - >1 workplane, 1 point -> list[Vector]
-        - >1 workplane, >1 points -> list[list[Vector]]
-        The two list[Vector] outputs are easily distinguished as the user
-        provides the points to the API.
+        - 1 point -> Vector
+        - >1 points -> list[Vector]
         """
         points_per_workplane = []
-        for workplane in WorkplaneList._get_context().workplanes:
-            localized_pts = [
-                workplane.from_local_coords(pt) if isinstance(pt, tuple) else pt
-                for pt in points
-            ]
-            if len(localized_pts) == 1:
-                points_per_workplane.append(localized_pts[0])
-            else:
-                points_per_workplane.extend(localized_pts)
+        workplane = WorkplaneList._get_context().workplanes[0]
+        localized_pts = [
+            workplane.from_local_coords(pt) if isinstance(pt, tuple) else pt
+            for pt in points
+        ]
+        if len(localized_pts) == 1:
+            points_per_workplane.append(localized_pts[0])
+        else:
+            points_per_workplane.extend(localized_pts)
 
         if len(points_per_workplane) == 1:
             result = points_per_workplane[0]
@@ -756,12 +746,12 @@ class Workplanes(WorkplaneList):
 
 #
 # To avoid import loops, Vector add & sub are monkey-patched
-def _vector_add(self, vec: VectorLike) -> Vector:
+def _vector_add(self: Vector, vec: VectorLike) -> Vector:
     """Mathematical addition function where tuples are localized if workplane exists"""
     if isinstance(vec, Vector):
         result = Vector(self.wrapped.Added(vec.wrapped))
     elif isinstance(vec, tuple) and WorkplaneList._get_context():
-        result = Vector(self.wrapped.Added(WorkplaneList.localize(vec).wrapped))
+        result = Vector(self.wrapped.Added(WorkplaneList.localize(vec).wrapped))  # type: ignore[union-attr]
     elif isinstance(vec, tuple):
         result = Vector(self.wrapped.Added(Vector(vec).wrapped))
     else:
@@ -770,12 +760,12 @@ def _vector_add(self, vec: VectorLike) -> Vector:
     return result
 
 
-def _vector_sub(self, vec: VectorLike) -> Vector:
+def _vector_sub(self: Vector, vec: VectorLike) -> Vector:
     """Mathematical subtraction function where tuples are localized if workplane exists"""
     if isinstance(vec, Vector):
         result = Vector(self.wrapped.Subtracted(vec.wrapped))
     elif isinstance(vec, tuple) and WorkplaneList._get_context():
-        result = Vector(self.wrapped.Subtracted(WorkplaneList.localize(vec).wrapped))
+        result = Vector(self.wrapped.Subtracted(WorkplaneList.localize(vec).wrapped))  # type: ignore[union-attr]
     elif isinstance(vec, tuple):
         result = Vector(self.wrapped.Subtracted(Vector(vec).wrapped))
     else:
@@ -784,5 +774,5 @@ def _vector_sub(self, vec: VectorLike) -> Vector:
     return result
 
 
-Vector.add = _vector_add
-Vector.sub = _vector_sub
+Vector.add = _vector_add  # type: ignore[assignment]
+Vector.sub = _vector_sub  # type: ignore[assignment]

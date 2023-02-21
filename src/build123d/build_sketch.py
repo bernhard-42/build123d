@@ -8,10 +8,6 @@ date: July 12th 2022
 desc:
     This python module is a library used to build planar sketches.
 
-TODO:
-- add center to arrays
-- bug: offset_2d doesn't work on a Wire made from a single Edge
-
 Instead of existing constraints how about constraints that return locations
 on objects:
 - two circles: c1, c2
@@ -41,8 +37,7 @@ license:
 import inspect
 from math import pi, sin, cos, tan, radians
 from typing import Union
-from build123d.hull import find_hull
-from build123d.build_enums import Align, CenterOf, FontStyle, Mode
+from build123d.build_enums import Align, FontStyle, Mode
 from build123d.direct_api import (
     Edge,
     Wire,
@@ -110,10 +105,10 @@ class BuildSketch(Builder):
         self.mode = mode
         self.sketch_local: Compound = None
         self.pending_edges: ShapeList[Edge] = ShapeList()
-        self.last_faces = []
+        self.last_faces: ShapeList[Face] = ShapeList()
         super().__init__(*workplanes, mode=mode)
 
-    def solids(self):
+    def solids(self, *args):
         """solids() not implemented"""
         raise NotImplementedError("solids() doesn't apply to BuildSketch")
 
@@ -203,9 +198,9 @@ class BuildSketch(Builder):
             post_faces = (
                 set() if self.sketch_local is None else set(self.sketch_local.faces())
             )
-            self.last_vertices = list(post_vertices - pre_vertices)
-            self.last_edges = list(post_edges - pre_edges)
-            self.last_faces = list(post_faces - pre_faces)
+            self.last_vertices = ShapeList(post_vertices - pre_vertices)
+            self.last_edges = ShapeList(post_edges - pre_edges)
+            self.last_faces = ShapeList(post_faces - pre_faces)
 
             self.pending_edges.extend(
                 new_edges + [e for w in new_wires for e in w.edges()]
@@ -225,8 +220,7 @@ class BuildSketch(Builder):
                 raise RuntimeError(
                     f"No valid context found, use one of {caller._applies_to}"
                 )
-            else:
-                raise RuntimeError(f"No valid context found")
+            raise RuntimeError("No valid context found")
 
         return result
 
@@ -257,7 +251,7 @@ class MakeFace(Face):
 
         outer_edges = edges if edges else context.pending_edges
         pending_face = Face.make_from_wires(Wire.combine(outer_edges)[0])
-        context._add_to_context(pending_face, mode)
+        context._add_to_context(pending_face, mode=mode)
         context.pending_edges = ShapeList()
         super().__init__(pending_face.wrapped)
 
@@ -265,10 +259,11 @@ class MakeFace(Face):
 class MakeHull(Face):
     """Sketch Operation: Make Hull
 
-    Create a face from the hull of the given edges
+    Create a face from the convex hull of the given edges
 
     Args:
-        edges (Edge): sequence of edges to hull
+        edges (Edge, optional): sequence of edges to hull. Defaults to all
+            pending and sketch edges.
         mode (Mode, optional): combination mode. Defaults to Mode.ADD.
     """
 
@@ -278,12 +273,17 @@ class MakeHull(Face):
         context: BuildSketch = BuildSketch._get_context(self)
         context.validate_inputs(self, edges)
 
+        if not (edges or context.pending_edges or context.sketch_local):
+            raise ValueError("No objects to create a convex hull")
+
         self.edges = edges
         self.mode = mode
 
-        hull_edges = edges if edges else context.pending_edges
-        pending_face = Face.make_from_wires(find_hull(hull_edges))
-        context._add_to_context(pending_face, mode)
+        hull_edges = list(edges) if edges else context.pending_edges
+        if context.sketch_local:
+            hull_edges.extend(context.sketch_local.edges())
+        pending_face = Face.make_from_wires(Wire.make_convex_hull(hull_edges))
+        context._add_to_context(pending_face, mode=mode)
         context.pending_edges = ShapeList()
         super().__init__(pending_face.wrapped)
 
@@ -326,7 +326,9 @@ class BaseSketchObject(Compound):
                 if align[i] == Align.MIN:
                     align_offset.append(-bbox.min.to_tuple()[i])
                 elif align[i] == Align.CENTER:
-                    align_offset.append(-(bbox.min.to_tuple()[i] + bbox.max.to_tuple()[i]) / 2)
+                    align_offset.append(
+                        -(bbox.min.to_tuple()[i] + bbox.max.to_tuple()[i]) / 2
+                    )
                 elif align[i] == Align.MAX:
                     align_offset.append(-bbox.max.to_tuple()[i])
         else:
@@ -756,7 +758,6 @@ class Text(BaseSketchObject):
         rotation: float = 0,
         mode: Mode = Mode.ADD,
     ) -> Compound:
-
         context: BuildSketch = BuildSketch._get_context(self)
         context.validate_inputs(self)
 
