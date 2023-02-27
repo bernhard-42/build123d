@@ -103,30 +103,49 @@ class Builder(ABC):
         self.mode = mode
         self.workplanes = workplanes
         self._reset_tok = None
+        self._python_frame = inspect.currentframe().f_back.f_back
         self.builder_parent = None
         self.last_vertices: ShapeList[Vertex] = ShapeList()
         self.last_edges: ShapeList[Edge] = ShapeList()
         self.last_faces: ShapeList[Face] = ShapeList()
         self.last_solids: ShapeList[Solid] = ShapeList()
         self.workplanes_context = None
-        self.active: bool = False  # is the builder context active
         self.exit_workplanes = None
 
     def __enter__(self):
         """Upon entering record the parent and a token to restore contextvars"""
 
-        # Only set parents from the same scope
-        parent = Builder._get_context()
-        self.builder_parent = parent if parent in locals().values() else None
+        # Only set parents from the same scope. Note inspect.currentframe() is supported
+        # by CPython in Linux, Window & MacOS but may not be supported in other python
+        # implementations.  Support outside of these OS's is outside the scope of this
+        # project.
+        same_scope = (
+            Builder._get_context()._python_frame == inspect.currentframe().f_back
+            if Builder._get_context()
+            else False
+        )
+
+        if same_scope:
+            self.builder_parent = Builder._get_context()
+        else:
+            self.builder_parent = None
+            self.workplanes = self.workplanes if self.workplanes else [Plane.XY]
+
         self._reset_tok = self._current.set(self)
+
+        logger.info(
+            "Entering %s with mode=%s which is in %s scope as parent",
+            type(self).__name__,
+            self.mode,
+            "same" if same_scope else "different",
+        )
+
         # If there are no workplanes, create a default XY plane
         if not self.workplanes and not WorkplaneList._get_context():
             self.workplanes_context = Workplanes(Plane.XY).__enter__()
         elif self.workplanes:
             self.workplanes_context = Workplanes(*self.workplanes).__enter__()
 
-        self.active = True
-        logger.info("Entering %s with mode=%s", type(self).__name__, self.mode)
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
@@ -145,8 +164,6 @@ class Builder(ABC):
         # workplanes that were created then exit
         if self.workplanes:
             self.workplanes_context.__exit__(None, None, None)
-
-        self.active = False
 
         logger.info("Exiting %s", type(self).__name__)
 
@@ -485,7 +502,7 @@ class PolarLocations(LocationList):
         radius (float): array radius
         count (int): Number of points to push
         start_angle (float, optional): angle to first point from +ve X axis. Defaults to 0.0.
-        stop_angle (float, optional): angle to last point from +ve X axis. Defaults to 360.0.
+        angular_range (float, optional): magnitude of array from start angle. Defaults to 360.0.
         rotate (bool, optional): Align locations with arc tangents. Defaults to True.
 
     Raises:
@@ -497,13 +514,13 @@ class PolarLocations(LocationList):
         radius: float,
         count: int,
         start_angle: float = 0.0,
-        stop_angle: float = 360.0,
+        angular_range: float = 360.0,
         rotate: bool = True,
     ):
         if count < 1:
             raise ValueError(f"At least 1 elements required, requested {count}")
 
-        angle_step = (stop_angle - start_angle) / count
+        angle_step = angular_range / count
 
         # Note: rotate==False==0 so the location orientation doesn't change
         local_locations = []
@@ -512,7 +529,7 @@ class PolarLocations(LocationList):
                 Location(
                     Vector(radius, 0).rotate(Axis.Z, start_angle + angle_step * i),
                     Vector(0, 0, 1),
-                    rotate * angle_step * i,
+                    rotate * (angle_step * i + start_angle),
                 )
             )
 
@@ -560,14 +577,20 @@ class Locations(LocationList):
         Returns:
             list[Location]: group of locations moved to existing locations as a group
         """
-        local_vertex_compound = Compound.make_compound(
-            [Face.make_rect(1, 1).locate(l) for l in local_locations]
-        )
         location_group = []
-        for group_center in LocationList._get_context().local_locations:
-            location_group.extend(
-                [v.location for v in local_vertex_compound.moved(group_center).faces()]
+        if LocationList._get_context():
+            local_vertex_compound = Compound.make_compound(
+                [Face.make_rect(1, 1).locate(l) for l in local_locations]
             )
+            for group_center in LocationList._get_context().local_locations:
+                location_group.extend(
+                    [
+                        v.location
+                        for v in local_vertex_compound.moved(group_center).faces()
+                    ]
+                )
+        else:
+            location_group = local_locations
         return location_group
 
 
@@ -658,13 +681,13 @@ class WorkplaneList:
     def __enter__(self):
         """Upon entering create a token to restore contextvars"""
         self._reset_tok = self._current.set(self)
-        self.locations_context = LocationList([Location(Vector())]).__enter__()
         logger.info(
             "%s is pushing %d workplanes: %s",
             type(self).__name__,
             len(self.workplanes),
             self.workplanes,
         )
+        self.locations_context = LocationList([Location(Vector())]).__enter__()
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):

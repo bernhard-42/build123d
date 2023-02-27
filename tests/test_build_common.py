@@ -138,7 +138,6 @@ class TestShapeList(unittest.TestCase):
                     (False, False),
                 ]:
                     with self.subTest(axis=axis, inclusive=inclusive):
-
                         faces = test.faces().filter_by_position(axis, -1, 1, inclusive)
                         edges = test.edges().filter_by_position(axis, -1, 1, inclusive)
                         self.assertTrue(isinstance(faces, list))
@@ -413,6 +412,16 @@ class TestBuilderExit(unittest.TestCase):
 
 
 class TestLocations(unittest.TestCase):
+    def test_polar_locations(self):
+        locs = PolarLocations(1, 5, 45, 90, False).local_locations
+        for i, angle in enumerate(range(45, 135, 18)):
+            self.assertTupleAlmostEquals(
+                locs[i].position.to_tuple(),
+                Vector(1, 0).rotate(Axis.Z, angle).to_tuple(),
+                5,
+            )
+            self.assertTupleAlmostEquals(locs[i].orientation.to_tuple(), (0, 0, 0), 5)
+
     def test_no_centering(self):
         with BuildSketch():
             with GridLocations(4, 4, 2, 2, align=(Align.MIN, Align.MIN)) as l:
@@ -510,8 +519,7 @@ class TestLocations(unittest.TestCase):
 
 
 class TestVectorExtensions(unittest.TestCase):
-    def test_vector_locationation(self):
-        WorkplaneList._get_context().__exit__(None, None, None)
+    def test_vector_localization(self):
         self.assertTupleAlmostEquals(
             (Vector(1, 1, 1) + (1, 2)).to_tuple(),
             (2, 3, 1),

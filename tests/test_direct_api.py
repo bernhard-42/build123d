@@ -2,6 +2,7 @@
 import copy
 import os
 import math
+import random
 import unittest
 from random import uniform
 from OCP.gp import (
@@ -598,15 +599,12 @@ class TestColor(unittest.TestCase):
 
 
 class TestCompound(unittest.TestCase):
-    def test_make_text(self):
-        text = Compound.make_text("test", 10, 10)
-        self.assertEqual(len(text.solids()), 4)
 
-    def test_make_2d_text(self):
+    def test_make_text(self):
         arc = Edge.make_three_point_arc((-50, 0, 0), (0, 20, 0), (50, 0, 0))
-        text = Compound.make_2d_text("test", 10, text_path=arc)
+        text = Compound.make_text("test", 10, text_path=arc)
         self.assertEqual(len(text.faces()), 4)
-        text = Compound.make_2d_text(
+        text = Compound.make_text(
             "test", 10, align=(Align.MAX, Align.MAX), text_path=arc
         )
         self.assertEqual(len(text.faces()), 4)
@@ -712,6 +710,89 @@ class TestEdge(unittest.TestCase):
     #         Edge.make_line((-10,0),(0,0)).overlaps(Edge.make_line((1.1*tolerance,0),(10,0)), tolerance)
     #     )
 
+    def test_to_wire(self):
+        edge = Edge.make_line((0, 0, 0), (1, 1, 1))
+        for end in [0, 1]:
+            self.assertTupleAlmostEquals(
+                edge.position_at(end).to_tuple(),
+                edge.to_wire().position_at(end).to_tuple(),
+                5,
+            )
+
+    def test_arc_center(self):
+        edges = [
+            Edge.make_circle(1, plane=Plane((1, 2, 3)), end_angle=30),
+            Edge.make_ellipse(1, 0.5, plane=Plane((1, 2, 3)), end_angle=30),
+        ]
+        for edge in edges:
+            self.assertTupleAlmostEquals(edge.arc_center.to_tuple(), (1, 2, 3), 5)
+        with self.assertRaises(ValueError):
+            Edge.make_line((0, 0), (1, 1)).arc_center
+
+    def test_intersections(self):
+        circle = Edge.make_circle(1)
+        line = Edge.make_line((0, -2), (0, 2))
+        crosses = circle.intersections(Plane.XY, line)
+        for target, actual in zip([(0, 1, 0), (0, -1, 0)], crosses):
+            self.assertTupleAlmostEquals(actual.to_tuple(), target, 5)
+
+        with self.assertRaises(ValueError):
+            circle.intersections(Plane.XY, Edge.make_line((0, 0, -1), (0, 0, 1)))
+        with self.assertRaises(ValueError):
+            circle.intersections(Plane.XZ, Edge.make_line((0, 0, -1), (0, 0, 1)))
+
+        self_intersect = Edge.make_spline([(-3, 2), (3, -2), (4, 0), (3, 2), (-3, -2)])
+        self.assertTupleAlmostEquals(
+            self_intersect.intersections(Plane.XY)[0].to_tuple(),
+            (-2.6861636507066047, 0, 0),
+            5,
+        )
+
+    def test_trim(self):
+        line = Edge.make_line((-2, 0), (2, 0))
+        self.assertTupleAlmostEquals(
+            line.trim(0.25, 0.75).position_at(0).to_tuple(), (-1, 0, 0), 5
+        )
+        self.assertTupleAlmostEquals(
+            line.trim(0.25, 0.75).position_at(1).to_tuple(), (1, 0, 0), 5
+        )
+        with self.assertRaises(ValueError):
+            line.trim(0.75, 0.25)
+
+    def test_bezier(self):
+        with self.assertRaises(ValueError):
+            Edge.make_bezier((1, 1))
+        cntl_pnts = [(1, 2, 3)] * 30
+        with self.assertRaises(ValueError):
+            Edge.make_bezier(*cntl_pnts)
+        with self.assertRaises(ValueError):
+            Edge.make_bezier((0, 0, 0), (1, 1, 1), weights=[1.0])
+
+        bezier = Edge.make_bezier((0, 0), (0, 1), (1, 1), (1, 0))
+        bbox = bezier.bounding_box()
+        self.assertTupleAlmostEquals(bbox.min.to_tuple(), (0, 0, 0), 5)
+        self.assertTupleAlmostEquals(bbox.max.to_tuple(), (1, 0.75, 0), 5)
+
+    def test_mid_way(self):
+        mid = Edge.make_mid_way(
+            Edge.make_line((0, 0), (0, 1)), Edge.make_line((1, 0), (1, 1)), 0.25
+        )
+        self.assertTupleAlmostEquals(mid.position_at(0).to_tuple(), (0.25, 0, 0), 5)
+        self.assertTupleAlmostEquals(mid.position_at(1).to_tuple(), (0.25, 1, 0), 5)
+
+    def test_distribute_locations(self):
+        with self.assertRaises(ValueError):
+            Edge.make_circle(1).distribute_locations(1)
+
+        locs = Edge.make_circle(1).distribute_locations(5, positions_only=True)
+        for i, loc in enumerate(locs):
+            self.assertTupleAlmostEquals(
+                loc.position.to_tuple(),
+                Vector(1, 0, 0).rotate(Axis.Z, i * 90).to_tuple(),
+                5,
+            )
+            self.assertTupleAlmostEquals(loc.orientation.to_tuple(), (0, 0, 0), 5)
+
 
 class TestFace(unittest.TestCase):
     def test_make_surface_from_curves(self):
@@ -738,7 +819,7 @@ class TestFace(unittest.TestCase):
             test_face.center(CenterOf.MASS).to_tuple(), (2 / 3, 1 / 3, 0), 1
         )
         self.assertTupleAlmostEquals(
-            test_face.bounding_box().center().to_tuple(),
+            test_face.center(CenterOf.BOUNDING_BOX).to_tuple(),
             (0.5, 0.5, 0),
             5,
         )
@@ -754,6 +835,142 @@ class TestFace(unittest.TestCase):
         self.assertAlmostEqual(
             bottom.normal_at().Z, bottom_pln.Axis().Direction().Z(), 5
         )
+
+    def test_length_width(self):
+        test_face = Face.make_rect(10, 8, Plane.XZ)
+        self.assertAlmostEqual(test_face.length, 8, 5)
+        self.assertAlmostEqual(test_face.width, 10, 5)
+
+    def test_geometry(self):
+        box = Solid.make_box(1, 1, 2)
+        self.assertEqual(box.faces().sort_by(Axis.Z).last.geometry, "SQUARE")
+        self.assertEqual(box.faces().sort_by(Axis.Y).last.geometry, "RECTANGLE")
+        with BuildPart() as test:
+            with BuildSketch():
+                RegularPolygon(1, 3)
+            Extrude(amount=1)
+        self.assertEqual(test.faces().sort_by(Axis.Z).last.geometry, "POLYGON")
+
+    def test_negate(self):
+        square = Face.make_rect(1, 1)
+        self.assertTupleAlmostEquals(square.normal_at().to_tuple(), (0, 0, 1), 5)
+        flipped_square = -square
+        self.assertTupleAlmostEquals(
+            flipped_square.normal_at().to_tuple(), (0, 0, -1), 5
+        )
+
+    def test_offset(self):
+        bbox = Face.make_rect(2, 2, Plane.XY).offset(5).bounding_box()
+        self.assertTupleAlmostEquals(bbox.min.to_tuple(), (-1, -1, 5), 5)
+        self.assertTupleAlmostEquals(bbox.max.to_tuple(), (1, 1, 5), 5)
+
+    def test_make_from_wires(self):
+        outer = Wire.make_circle(10)
+        inners = [
+            Wire.make_circle(1).locate(Location((-2, 2, 0))),
+            Wire.make_circle(1).locate(Location((2, 2, 0))),
+        ]
+        happy = Face.make_from_wires(outer, inners)
+        self.assertAlmostEqual(happy.area, math.pi * (10**2 - 2), 5)
+
+        outer = Edge.make_circle(10, end_angle=180).to_wire()
+        with self.assertRaises(ValueError):
+            Face.make_from_wires(outer, inners)
+        with self.assertRaises(ValueError):
+            Face.make_from_wires(Wire.make_circle(10, Plane.XZ), inners)
+
+        outer = Wire.make_circle(10)
+        inners = [
+            Wire.make_circle(1).locate(Location((-2, 2, 0))),
+            Edge.make_circle(1, end_angle=180).to_wire().locate(Location((2, 2, 0))),
+        ]
+        with self.assertRaises(ValueError):
+            Face.make_from_wires(outer, inners)
+
+    def test_sew_faces(self):
+        patches = [
+            Face.make_rect(1, 1, Plane((x, y, z)))
+            for x in range(2)
+            for y in range(2)
+            for z in range(3)
+        ]
+        random.shuffle(patches)
+        sheets = Face.sew_faces(patches)
+        self.assertEqual(len(sheets), 3)
+        self.assertEqual(len(sheets[0]), 4)
+        self.assertTrue(isinstance(sheets[0][0], Face))
+
+    def test_surface_from_points(self):
+        pnts = [
+            [
+                Vector(x, y, math.cos(math.pi * x / 10) + math.sin(math.pi * y / 10))
+                for x in range(11)
+            ]
+            for y in range(11)
+        ]
+        surface = Face.make_surface_from_points(pnts)
+        bbox = surface.bounding_box()
+        self.assertTupleAlmostEquals(bbox.min.to_tuple(), (0, 0, -1), 3)
+        self.assertTupleAlmostEquals(bbox.max.to_tuple(), (10, 10, 2), 2)
+
+    def test_thicken(self):
+        pnts = [
+            [
+                Vector(x, y, math.cos(math.pi * x / 10) + math.sin(math.pi * y / 10))
+                for x in range(11)
+            ]
+            for y in range(11)
+        ]
+        surface = Face.make_surface_from_points(pnts)
+        solid = surface.thicken(1)
+        self.assertAlmostEqual(solid.volume, 101.59, 2)
+
+        square = Face.make_rect(10, 10)
+        bbox = square.thicken(1, normal_override=(0, 0, -1)).bounding_box()
+        self.assertTupleAlmostEquals(bbox.min.to_tuple(), (-5, -5, -1), 5)
+        self.assertTupleAlmostEquals(bbox.max.to_tuple(), (5, 5, 0), 5)
+
+    def test_make_holes(self):
+        radius = 10
+        circumference = 2 * math.pi * radius
+        hex_diagonal = 4 * (circumference / 10) / 3
+        cylinder = Solid.make_cylinder(radius, hex_diagonal * 5)
+        cylinder_wall: Face = cylinder.faces().filter_by(GeomType.PLANE, reverse=True)[
+            0
+        ]
+        with BuildSketch(Plane.XZ.offset(radius)) as hex:
+            with Locations((0, hex_diagonal)):
+                RegularPolygon(
+                    hex_diagonal * 0.4, 6, align=(Align.CENTER, Align.CENTER)
+                )
+        hex_wire_vertical: Wire = hex.sketch.faces()[0].outer_wire()
+
+        projected_wire: Wire = hex_wire_vertical.project_to_shape(
+            target_object=cylinder, center=(0, 0, hex_wire_vertical.center().Z)
+        )[0]
+        projected_wires = [
+            projected_wire.rotate(Axis.Z, -90 + i * 360 / 10).translate(
+                (0, 0, (j + (i % 2) / 2) * hex_diagonal)
+            )
+            for i in range(5)
+            for j in range(4 - i % 2)
+        ]
+        cylinder_walls_with_holes = cylinder_wall.make_holes(projected_wires)
+        self.assertTrue(cylinder_walls_with_holes.is_valid())
+        self.assertLess(cylinder_walls_with_holes.area, cylinder_wall.area)
+
+    def test_is_inside(self):
+        square = Face.make_rect(10, 10)
+        self.assertTrue(square.is_inside((1, 1)))
+        self.assertFalse(square.is_inside((20, 1)))
+
+    def test_import_stl(self):
+        torus = Solid.make_torus(10, 1)
+        torus.export_stl("test_torus.stl")
+        imported_torus = Face.import_stl("test_torus.stl")
+        # The torus from stl is tessellated therefore the areas will only be close
+        self.assertAlmostEqual(imported_torus.area, torus.area, 0)
+        os.remove("test_torus.stl")
 
 
 class TestFunctions(unittest.TestCase):
@@ -1776,12 +1993,12 @@ class TestPlane(unittest.TestCase):
         self.assertTupleAlmostEquals(loc.orientation.to_tuple(), (0, 0, 90), 5)
 
 
-class ProjectionTests(unittest.TestCase):
+class TestProjection(unittest.TestCase):
     def test_flat_projection(self):
         sphere = Solid.make_sphere(50)
         projection_direction = Vector(0, -1, 0)
         planar_text_faces = (
-            Compound.make_2d_text("Flat", 30, align=(Align.CENTER, Align.CENTER))
+            Compound.make_text("Flat", 30, align=(Align.CENTER, Align.CENTER))
             .rotate(Axis.X, 90)
             .faces()
         )
@@ -1795,7 +2012,7 @@ class ProjectionTests(unittest.TestCase):
     #     sphere = Solid.make_sphere(50)
     #     projection_center = Vector(0, 0, 0)
     #     planar_text_faces = (
-    #         Compound.make_2d_text("Conical", 25, halign=Halign.CENTER)
+    #         Compound.make_text("Conical", 25, halign=Halign.CENTER)
     #         .rotate(Axis.X, 90)
     #         .translate((0, -60, 0))
     #         .faces()
@@ -1806,15 +2023,6 @@ class ProjectionTests(unittest.TestCase):
     #         for f in planar_text_faces
     #     ]
     #     self.assertEqual(len(projected_text_faces), 8)
-
-    # def test_projection_with_internal_points(self):
-    #     sphere = Solid.make_sphere(50)
-    #     f = Face.make_rect(10, 10).translate(Vector(0, 0, 60))
-    #     pts = [Vector(x, y, 60) for x in [-5, 5] for y in [-5, 5]]
-    #     projected_faces = f.project_to_shape(
-    #         sphere, center=(0, 0, 0), internal_face_points=pts
-    #     )
-    #     self.assertEqual(len(projected_faces), 1)
 
     def test_text_projection(self):
         sphere = Solid.make_sphere(50)
@@ -1828,17 +2036,8 @@ class ProjectionTests(unittest.TestCase):
             .sort_by(Axis.Z)[0]
         )
 
-        # projected_text = sphere.project_text(
-        #     txt="fox",
-        #     fontsize=14,
-        #     depth=3,
-        #     path=arch_path,
-        # )
-        # self.assertEqual(len(projected_text.solids()), 3)
-        projected_text = sphere.project_text(
-            txt="dog",
-            fontsize=14,
-            depth=0,
+        projected_text = sphere.project_faces(
+            faces=Compound.make_text("dog", fontsize=14),
             path=arch_path,
         )
         self.assertEqual(len(projected_text.solids()), 0)
@@ -1852,6 +2051,22 @@ class ProjectionTests(unittest.TestCase):
     #     w = Face.make_rect(10, 10).outer_wire()
     #     with self.assertRaises(ValueError):
     #         w.project_to_shape(sphere, center=None, direction=None)[0]
+
+    def test_project_edge(self):
+        projection = Edge.make_circle(1, Plane.XY.offset(-5)).project_to_shape(
+            Solid.make_box(1, 1, 1), (0, 0, 1)
+        )
+        self.assertTupleAlmostEquals(
+            projection[0].position_at(1).to_tuple(), (1, 0, 0), 5
+        )
+        self.assertTupleAlmostEquals(
+            projection[0].position_at(0).to_tuple(), (0, 1, 0), 5
+        )
+        self.assertTupleAlmostEquals(projection[0].arc_center.to_tuple(), (0, 0, 0), 5)
+
+    def test_to_axis(self):
+        with self.assertRaises(ValueError):
+            Edge.make_circle(1, end_angle=30).to_axis()
 
 
 class TestShape(unittest.TestCase):
@@ -2030,6 +2245,15 @@ class TestShape(unittest.TestCase):
         self.assertTupleAlmostEquals(intersections[1][0].to_tuple(), (0.5, 0.5, 0), 5)
         self.assertTupleAlmostEquals(intersections[1][1].to_tuple(), (0, 0, -1), 5)
 
+    def test_clean_error(self):
+        """Note that this test is here to alert build123d to changes in bad OCCT clean behavior
+        with spheres or hemispheres. The extra edge in a sphere seems to be the cause of this.
+        """
+        sphere = Solid.make_sphere(1)
+        divider = Solid.make_box(0.1, 3, 3, Plane(origin=(-0.05, -1.5, -1.5)))
+        positive_half, negative_half = [s.clean() for s in sphere.cut(divider).solids()]
+        self.assertGreater(abs(positive_half.volume - negative_half.volume), 0, 1)
+
 
 class TestShapeList(unittest.TestCase):
     """Test ShapeList functionality"""
@@ -2092,7 +2316,27 @@ class TestShapeList(unittest.TestCase):
             boxes.solids().group_by("AREA")
 
 
+class TestShell(unittest.TestCase):
+    def test_shell_init(self):
+        box_faces = Solid.make_box(1, 1, 1).faces()
+        box_shell = Shell.make_shell(box_faces)
+        self.assertTrue(box_shell.is_valid())
+
+    def test_center(self):
+        box_faces = Solid.make_box(1, 1, 1).faces()
+        box_shell = Shell.make_shell(box_faces)
+        self.assertTupleAlmostEquals(box_shell.center().to_tuple(), (0.5, 0.5, 0.5), 5)
+
+
 class TestSolid(unittest.TestCase):
+    def test_make_solid(self):
+        box_faces = Solid.make_box(1, 1, 1).faces()
+        box_shell = Shell.make_shell(box_faces)
+        box = Solid.make_solid(box_shell)
+        self.assertAlmostEqual(box.area, 6, 5)
+        self.assertAlmostEqual(box.volume, 1, 5)
+        self.assertTrue(box.is_valid())
+
     def test_extrude_with_taper(self):
         base = Face.make_rect(1, 1)
         pyramid = Solid.extrude_linear(base, normal=(0, 0, 1), taper=1)
@@ -2120,6 +2364,70 @@ class TestSolid(unittest.TestCase):
         top = twist.faces().sort_by(Axis.Z)[-1].rotate(Axis.Z, 45)
         bottom = twist.faces().sort_by(Axis.Z)[0]
         self.assertAlmostEqual(top.translate((0, 0, -1)).intersect(bottom).area, 1, 5)
+
+    def test_make_loft(self):
+        loft = Solid.make_loft(
+            [Wire.make_rect(2, 2), Wire.make_circle(1, Plane((0, 0, 1)))]
+        )
+        self.assertAlmostEqual(loft.volume, (4 + math.pi) / 2, 1)
+
+        with self.assertRaises(ValueError):
+            Solid.make_loft([Wire.make_rect(1, 1)])
+
+    def test_extrude_until(self):
+        square = Face.make_rect(1, 1)
+        box = Solid.make_box(4, 4, 1, Plane((-2, -2, 3)))
+        extrusion = Solid.extrude_until(square, box, (0, 0, 1), Until.LAST)
+        self.assertAlmostEqual(extrusion.volume, 4, 5)
+
+
+class TestSVG(unittest.TestCase):
+    def test_svg_export_import(self):
+        with BuildSketch() as square:
+            Rectangle(1, 1)
+        square.sketch.export_svg(
+            "test_svg.svg", (10, -10, 10), (0, 0, 1), svg_opts={"show_axes": False}
+        )
+        svg_imported = SVG.import_svg("test_svg.svg")
+        self.assertEqual(len(svg_imported), 4)
+
+        with BuildSketch() as square:
+            Circle(1)
+        square.sketch.export_svg(
+            "test_svg.svg", (0, 0, 10), (0, 1, 0), svg_opts={"show_axes": True}
+        )
+        svg_imported = SVG.import_svg("test_svg.svg")
+        self.assertGreater(len(svg_imported), 1)
+
+        box = Solid.make_box(1, 1, 1)
+        box.export_svg(
+            "test_svg.svg",
+            (10, -10, 10),
+            (0, 0, 1),
+            svg_opts={"show_axes": False, "pixel_scale": 100, "stroke_width": 1},
+        )
+        svg_imported = SVG.import_svg("test_svg.svg")
+        self.assertEqual(len(svg_imported), 16)
+
+        box = Solid.make_box(1, 1, 1)
+        box.export_svg(
+            "test_svg.svg",
+            (10, -10, 10),
+            (0, 0, 1),
+            svg_opts={
+                "show_axes": False,
+                "pixel_scale": 100,
+                "stroke_width": 1,
+                "show_hidden": False,
+            },
+        )
+        svg_imported = SVG.import_svg("test_svg.svg")
+        self.assertEqual(len(svg_imported), 9)
+
+        os.remove("test_svg.svg")
+
+        with self.assertRaises(ValueError):
+            SVG.import_svg("test_svg.svg")
 
 
 class TestVector(unittest.TestCase):
