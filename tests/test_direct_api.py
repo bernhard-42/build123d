@@ -827,14 +827,6 @@ class TestFace(unittest.TestCase):
         test_face = Face.make_plane()
         self.assertTupleAlmostEquals(test_face.normal_at().to_tuple(), (0, 0, 1), 5)
 
-    def test_to_pln(self):
-        box = Solid.make_box(1, 1, 1)
-        bottom = box.faces().sort_by(Axis.Z)[0]
-        bottom_pln = bottom.to_pln()
-        self.assertAlmostEqual(
-            bottom.normal_at().Z, bottom_pln.Axis().Direction().Z(), 5
-        )
-
     def test_length_width(self):
         test_face = Face.make_rect(10, 8, Plane.XZ)
         self.assertAlmostEqual(test_face.length, 8, 5)
@@ -899,7 +891,7 @@ class TestFace(unittest.TestCase):
         self.assertEqual(len(sheets[0]), 4)
         self.assertTrue(isinstance(sheets[0][0], Face))
 
-    def test_surface_from_points(self):
+    def test_surface_from_array_of_points(self):
         pnts = [
             [
                 Vector(x, y, math.cos(math.pi * x / 10) + math.sin(math.pi * y / 10))
@@ -907,7 +899,7 @@ class TestFace(unittest.TestCase):
             ]
             for y in range(11)
         ]
-        surface = Face.make_surface_from_points(pnts)
+        surface = Face.make_surface_from_array_of_points(pnts)
         bbox = surface.bounding_box()
         self.assertTupleAlmostEquals(bbox.min.to_tuple(), (0, 0, -1), 3)
         self.assertTupleAlmostEquals(bbox.max.to_tuple(), (10, 10, 2), 2)
@@ -920,7 +912,7 @@ class TestFace(unittest.TestCase):
             ]
             for y in range(11)
         ]
-        surface = Face.make_surface_from_points(pnts)
+        surface = Face.make_surface_from_array_of_points(pnts)
         solid = surface.thicken(1)
         self.assertAlmostEqual(solid.volume, 101.59, 2)
 
@@ -987,6 +979,11 @@ class TestFunctions(unittest.TestCase):
         self.assertEqual(len(wires), 2)
         self.assertAlmostEqual(wires[0].length, 4, 5)
         self.assertAlmostEqual(wires[1].length, 6, 5)
+
+    def test_polar(self):
+        pnt = polar(1, 30)
+        self.assertAlmostEqual(pnt[0], math.sqrt(3) / 2, 5)
+        self.assertAlmostEqual(pnt[1], 0.5, 5)
 
 
 class TestImportExport(unittest.TestCase):

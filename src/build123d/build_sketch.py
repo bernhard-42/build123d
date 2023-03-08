@@ -8,15 +8,6 @@ date: July 12th 2022
 desc:
     This python module is a library used to build planar sketches.
 
-Instead of existing constraints how about constraints that return locations
-on objects:
-- two circles: c1, c2
-- "line tangent to c1 & c2" : 4 locations on each circle
-  - these would be construction geometry
-  - user sorts to select the ones they want
-  - uses these points to build geometry
-  - how many constraints are currently implemented?
-
 license:
 
     Copyright 2022 Gumyr
@@ -140,6 +131,14 @@ class BuildSketch(Builder):
                 new_edges.extend(compound.get_type(Edge))
                 new_wires.extend(compound.get_type(Wire))
 
+            # Align objects with Plane.XY if elevated
+            for obj in new_faces + new_edges + new_wires:
+                if obj.position.Z != 0.0:
+                    logger.info("%s realigned to Sketch's Plane", type(obj).__name__)
+                    obj.position = obj.position - Vector(0, 0, obj.position.Z)
+                if isinstance(obj, Face) and not obj.is_coplanar(Plane.XY):
+                    raise ValueError("Face not coplanar with sketch")
+
             pre_vertices = (
                 set()
                 if self.sketch_local is None
@@ -201,10 +200,6 @@ class BuildSketch(Builder):
     @classmethod
     def _get_context(cls, caller=None) -> BuildSketch:
         """Return the instance of the current builder"""
-        logger.info(
-            "Context requested by %s",
-            type(inspect.currentframe().f_back.f_locals["self"]).__name__,
-        )
 
         result = cls._current.get(None)
         if caller is not None and result is None:
@@ -213,6 +208,11 @@ class BuildSketch(Builder):
                     f"No valid context found, use one of {caller._applies_to}"
                 )
             raise RuntimeError("No valid context found")
+
+        logger.info(
+            "Context requested by %s",
+            type(inspect.currentframe().f_back.f_locals["self"]).__name__,
+        )
 
         return result
 

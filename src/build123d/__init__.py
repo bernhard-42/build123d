@@ -32,6 +32,7 @@ __all__ = [
     "Select",
     "SortBy",
     "Transition",
+    "Unit",
     "Until",
     # Classes
     "Rotation",
@@ -126,4 +127,6 @@ __all__ = [
     "import_stl",
     "import_svg",
     "import_svg_as_buildline_code",
+    # Other functions
+    "polar",
 ]
