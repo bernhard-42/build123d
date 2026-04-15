@@ -14,7 +14,7 @@ authors = [
 ]
 description = "A python CAD programming library"
 readme = "README.md"
-requires-python = ">= 3.11, < 3.15"
+requires-python = ">= 3.10, < 3.15"
 keywords = [
     "3d models",
     "3d printing",
@@ -53,7 +53,7 @@ dependencies = [
     # Install py-lib3mf ONLY on linux aarch64
     "py-lib3mf >= 2.4.1; sys_platform == 'linux' and platform_machine == 'aarch64'",
     "pygltflib >= 1.16.5, < 1.17.0",
-    "py-materials >= 2.0.5, < 2.1.0",
+    "py-materials >= 2.1.0, < 3.0.0",
     "threejs-materials >= 1.0.4, < 1.1.0",
 ]
 
