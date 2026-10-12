@@ -14,7 +14,7 @@ authors = [
 ]
 description = "A python CAD programming library"
 readme = "README.md"
-requires-python = ">= 3.11, < 3.15"
+requires-python = ">= 3.12, < 3.16"
 keywords = [
     "3d models",
     "3d printing",
