@@ -117,7 +117,7 @@ exclude = ["build123d._dev"]
 version = { attr = "build123d._version.version" }
 
 [tool.black]
-target-version = ["py311", "py312", "py313", "py314"]
+target-version = ["py312", "py313", "py314", "py315"]
 line-length = 88
 
 [tool.coverage.run]
