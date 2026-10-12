@@ -41,8 +41,9 @@ dependencies = [
     "ezdxf >= 1.1.0, < 2",
     "fonttools >= 4.39.0, < 5",
     "ipython >= 8.0.0, < 10",
-    "ocpsvg >= 0.7, < 0.8",
-    "ocp_gordon >= 0.3.1, < 0.4",
+    # the nanocct ports of ocpsvg 0.7.0 and ocp_gordon 0.3.1 (no PyPI release)
+    "ocpsvg @ git+https://github.com/bernhard-42/ocpsvg@nanocct",
+    "ocp_gordon @ git+https://github.com/bernhard-42/ocp_gordon@nanocct",
     "trianglesolver",
     "sympy",
     "scipy",
