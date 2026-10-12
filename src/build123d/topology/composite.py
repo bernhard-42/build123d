@@ -58,7 +58,7 @@ import copy
 from collections.abc import Iterable, Iterator, Sequence
 from itertools import combinations
 from os import PathLike, fspath
-from typing import ClassVar
+from typing import Any, ClassVar
 from typing_extensions import Self
 
 from bd_materials import FinishedMaterial
@@ -785,7 +785,7 @@ class Compound(Mixin3D[TopoDS_Compound]):
         # are shared rather than copied without their owner, so a child's joint
         # connected to one stays usable. (A memo entry of None cut the links
         # until Python 3.15, whose deepcopy reads None as "not copied yet".)
-        outside: dict[object, object] = {
+        outside: dict[Any, Any] = {
             DEEPCOPY_CUT: frozenset(id(node) for node in self.path)
         }
         for node in self.path:
