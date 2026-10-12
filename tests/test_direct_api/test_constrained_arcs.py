@@ -29,8 +29,8 @@ license:
 import platform
 
 import pytest
-from OCP.BRep import BRep_Tool
-from OCP.gp import gp_Ax2d, gp_Circ2d, gp_Dir2d, gp_Pnt2d
+from nanocct.BRep import BRep_Tool
+from nanocct.gp import gp_Ax2d, gp_Circ2d, gp_Dir2d, gp_Pnt2d
 
 from build123d.build_enums import GeomType, LengthMode, Sagitta, Tangency
 from build123d.build_line import BuildLine
@@ -125,7 +125,7 @@ def test_tan2_rad_arcs_1():
     )
     assert len(tan2_rad_edges) == 4
 
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan2_rad_edges)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan2_rad_edges)
 
 
 def test_tan2_rad_arcs_2():
@@ -135,7 +135,7 @@ def test_tan2_rad_arcs_2():
 
     tan2_rad_edges = Edge.make_constrained_arcs(e1, e2, radius=0.5)
     assert len(tan2_rad_edges) == 1
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan2_rad_edges)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan2_rad_edges)
 
 
 def test_tan2_rad_arcs_3():
@@ -153,7 +153,7 @@ def test_tan2_rad_arcs_3():
     )
     assert len(tan2_rad_edges) == 2
 
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan2_rad_edges)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan2_rad_edges)
 
 
 def test_tan2_rad_arcs_4():
@@ -163,7 +163,7 @@ def test_tan2_rad_arcs_4():
     tan2_rad_edges = Edge.make_constrained_arcs((0, 0.5), e1, radius=0.5)
     assert len(tan2_rad_edges) == 1
 
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan2_rad_edges)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan2_rad_edges)
 
 
 def test_tan2_rad_arcs_5():
@@ -184,7 +184,7 @@ def test_tan2_center_on_1():
         center_on=c3_center_on,
     )
     assert len(tan2_on_edge) == 1
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan2_on_edge)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan2_on_edge)
 
 
 def test_tan2_center_on_2():
@@ -193,7 +193,7 @@ def test_tan2_center_on_2():
         (0, 3), (5, 0), center_on=Line((0, -5), (0, 5))
     )
     assert len(tan2_on_edge) == 1
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan2_on_edge)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan2_on_edge)
 
 
 def test_tan2_center_on_3():
@@ -202,7 +202,7 @@ def test_tan2_center_on_3():
         Line((-5, 3), (5, 3)), (5, 0), center_on=Line((0, -5), (0, 5))
     )
     assert len(tan2_on_edge) == 1
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan2_on_edge)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan2_on_edge)
 
 
 def test_tan2_center_on_4():
@@ -211,7 +211,7 @@ def test_tan2_center_on_4():
         Line((-5, 3), (5, 3)), (5, 0), center_on=Axis.Y
     )
     assert len(tan2_on_edge) == 1
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan2_on_edge)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan2_on_edge)
 
 
 def test_tan2_center_on_5():
@@ -262,7 +262,7 @@ def test_tan2_center_on_sagitta_both_returns_two_arcs():
     assert len(arcs) >= 2  # be permissive across kernels; typically 4
     # At least confirms BOTH path is covered and multiple solutions iterate
 
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in arcs)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in arcs)
 
 
 def test_tan2_center_on_sagitta_long_is_longer_than_short():
@@ -289,7 +289,7 @@ def test_tan2_center_on_sagitta_long_is_longer_than_short():
     assert len(long_arc) == 2
     assert long_arc[0].length > short_arc[0].length
     assert all(
-        BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in short_arc + long_arc
+        BRep_Tool.Curve_s(e.wrapped)[0] for e in short_arc + long_arc
     )
 
 
@@ -367,7 +367,7 @@ def test_tan2_center_on_multiple_solutions_both_counts():
     # Expect at least 2 arcs (often 4); asserts loop over multiple i values
     assert len(arcs) >= 2
 
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in arcs)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in arcs)
 
 
 def test_tan_center_on_1():
@@ -376,7 +376,7 @@ def test_tan_center_on_1():
     tan_center = Edge.make_constrained_arcs((c5, Tangency.UNQUALIFIED), center=(2, 1))
     assert len(tan_center) == 1
     assert tan_center[0].is_closed
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan_center)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan_center)
 
 
 def test_tan_center_on_2():
@@ -384,7 +384,7 @@ def test_tan_center_on_2():
     tan_center = Edge.make_constrained_arcs(Axis.X, center=(2, 1, 5))
     assert len(tan_center) == 1
     assert tan_center[0].is_closed
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan_center)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan_center)
 
 
 def test_tan_center_on_3():
@@ -393,7 +393,7 @@ def test_tan_center_on_3():
     tan_center = Edge.make_constrained_arcs(l1, center=(2, 0))
     assert len(tan_center) == 1
     assert tan_center[0].is_closed
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan_center)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan_center)
 
 
 def test_pnt_center_1():
@@ -401,12 +401,12 @@ def test_pnt_center_1():
     pnt_center = Edge.make_constrained_arcs((-2.5, 1.5), center=(-2, 1))
     assert len(pnt_center) == 1
     assert pnt_center[0].is_closed
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in pnt_center)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in pnt_center)
 
     pnt_center = Edge.make_constrained_arcs((-2.5, 1.5), center=Vertex(-2, 1))
     assert len(pnt_center) == 1
     assert pnt_center[0].is_closed
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in pnt_center)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in pnt_center)
 
 
 def test_tan_cen_arcs_center_equals_point_returns_empty():
@@ -433,7 +433,7 @@ def test_tan_rad_center_on_1():
     )
     assert len(tan_rad_on) == 1
     assert tan_rad_on[0].is_closed
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan_rad_on)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan_rad_on)
 
 
 def test_tan_rad_center_on_2():
@@ -442,7 +442,7 @@ def test_tan_rad_center_on_2():
     tan_rad_on = Edge.make_constrained_arcs(c1, radius=1, center_on=Axis.X)
     assert len(tan_rad_on) == 1
     assert tan_rad_on[0].is_closed
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan_rad_on)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan_rad_on)
 
 
 def test_tan_rad_center_on_3():
@@ -474,7 +474,7 @@ def test_tan3_1():
 
     tan3b = Edge.make_constrained_arcs(c5, c6, c7, sagitta=Sagitta.BOTH)
     assert len(tan3b) == 2
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in tan3b)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in tan3b)
 
 
 def test_tan3_2():
@@ -574,7 +574,7 @@ def test_eggplant():
         for i in range(4)
     )
     assert all(
-        BRep_Tool.Curve_s(e.wrapped, float(), float())
+        BRep_Tool.Curve_s(e.wrapped)[0]
         for e in [egg_bottom, egg_top, egg_right, egg_left]
     )
 

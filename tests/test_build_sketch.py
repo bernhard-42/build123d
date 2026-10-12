@@ -30,7 +30,7 @@ import unittest
 from math import atan2, degrees, gamma, pi, sqrt
 
 import pytest
-from OCP.Message import Message, Message_Gravity
+from nanocct.Message import Message, Message_Gravity
 
 from build123d import *
 from build123d.text import FONT_ASPECT, FontManager

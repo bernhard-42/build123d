@@ -78,12 +78,12 @@ from typing import TypeVar
 
 from scipy.integrate import solve_ivp
 
-from OCP.BRep import BRep_Builder, BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Surface
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace
-from OCP.BRepLib import BRepLib
-from OCP.Geom import Geom_Surface
-from OCP.Geom2d import (
+from nanocct.BRep import BRep_Builder, BRep_Tool
+from nanocct.BRepAdaptor import BRepAdaptor_Surface
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace
+from nanocct.BRepLib import BRepLib
+from nanocct.Geom import Geom_Surface
+from nanocct.Geom2d import (
     Geom2d_BSplineCurve,
     Geom2d_Circle,
     Geom2d_Curve,
@@ -91,14 +91,14 @@ from OCP.Geom2d import (
     Geom2d_Line,
     Geom2d_TrimmedCurve,
 )
-from OCP.Geom2dConvert import Geom2dConvert
-from OCP.GeomAbs import GeomAbs_Shape
-from OCP.GeomAPI import GeomAPI
-from OCP.IntTools import IntTools_FClass2d
-from OCP.gp import gp_Ax22d, gp_Dir2d, gp_Pln, gp_Pnt2d
-from OCP.TopAbs import TopAbs_Orientation, TopAbs_State
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS
+from nanocct.Geom2dConvert import Geom2dConvert
+from nanocct.GeomAbs import GeomAbs_Shape
+from nanocct.GeomAPI import GeomAPI
+from nanocct.IntTools import IntTools_FClass2d
+from nanocct.gp import gp_Ax22d, gp_Dir2d, gp_Pln, gp_Pnt2d
+from nanocct.TopAbs import TopAbs_Orientation, TopAbs_State
+from nanocct.TopLoc import TopLoc_Location
+import nanocct.TopoDS as TopoDS
 
 from build123d.build_enums import GeomType, Keep
 from build123d.geometry import TOLERANCE, Location, Matrix, Plane, Vector, VectorLike
@@ -338,7 +338,7 @@ class UVFrame:
                 tolerance
         """
         first, last = BRep_Tool.Range_s(edge.wrapped)
-        curve = BRep_Tool.Curve_s(edge.wrapped, first, last)
+        curve = BRep_Tool.Curve_s(edge.wrapped)[0]
         if isinstance(self.mapping, Matrix):
             image, first, last = _affine_image(
                 GeomAPI.To2d_s(curve, gp_Pln()), first, last, self.mapping
@@ -364,7 +364,7 @@ class UVFrame:
             lifted = Edge.make_spline(
                 list[VectorLike](uvs), parameters=params, tol=1e-9
             )
-            spline = BRep_Tool.Curve_s(lifted.wrapped, float(), float())
+            spline = BRep_Tool.Curve_s(lifted.wrapped)[0]
             # check midway between samples, in 3D
             error = max(
                 (
@@ -460,7 +460,7 @@ class UVFrame:
         that exactly; any other curve gets its 3D form from the kernel.
         """
         first, last = BRep_Tool.Range_s(lifted.wrapped)
-        curve = BRep_Tool.Curve_s(lifted.wrapped, first, last)
+        curve = BRep_Tool.Curve_s(lifted.wrapped)[0]
         pcurve = GeomAPI.To2d_s(curve, gp_Pln())
         points = [pcurve.Value(first + (last - first) * i / 4) for i in range(5)]
         along_v = all(abs(p.X() - points[0].X()) < 1e-9 for p in points)

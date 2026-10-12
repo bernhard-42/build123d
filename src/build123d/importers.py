@@ -37,22 +37,22 @@ from pathlib import Path
 from typing import Literal, TextIO
 
 import svgpathtools
-from OCP.Bnd import Bnd_Box
-from OCP.BRep import BRep_Builder
-from OCP.BRepBndLib import BRepBndLib
-from OCP.BRepTools import BRepTools
-from OCP.gp import gp_Trsf
-from OCP.Quantity import Quantity_ColorRGBA
-from OCP.RWStl import RWStl
-from OCP.STEPCAFControl import STEPCAFControl_Reader
-from OCP.TCollection import TCollection_AsciiString, TCollection_ExtendedString
-from OCP.TDataStd import TDataStd_Name
-from OCP.collections import Sequence_TDF_Label
-from OCP.TDF import TDF_Label
-from OCP.TDocStd import TDocStd_Document
-from OCP.TopAbs import TopAbs_FACE
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopoDS import (
+from nanocct.Bnd import Bnd_Box
+from nanocct.BRep import BRep_Builder
+from nanocct.BRepBndLib import BRepBndLib
+from nanocct.BRepTools import BRepTools
+from nanocct.gp import gp_Trsf
+from nanocct.Quantity import Quantity_ColorRGBA
+from nanocct.RWStl import RWStl
+from nanocct.STEPCAFControl import STEPCAFControl_Reader
+from nanocct.TCollection import TCollection_AsciiString, TCollection_ExtendedString
+from nanocct.TDataStd import TDataStd_Name
+from nanocct.NCollection import NCollection_Sequence
+from nanocct.TDF import TDF_Label
+from nanocct.TDocStd import TDocStd_Document
+from nanocct.TopAbs import TopAbs_FACE
+from nanocct.TopExp import TopExp_Explorer
+from nanocct.TopoDS import (
     TopoDS_Compound,
     TopoDS_Edge,
     TopoDS_Face,
@@ -62,7 +62,7 @@ from OCP.TopoDS import (
     TopoDS_Vertex,
     TopoDS_Wire,
 )
-from OCP.XCAFDoc import (
+from nanocct.XCAFDoc import (
     XCAFDoc_ColorCurv,
     XCAFDoc_ColorGen,
     XCAFDoc_ColorSurf,
@@ -147,11 +147,10 @@ def import_step(filename: PathLike | str | bytes) -> Compound:
     def get_name(label: TDF_Label) -> str:
         """Extract name and format"""
         name = ""
-        std_name = TDataStd_Name()
-        if label.IsAttribute(TDataStd_Name.GetID_s()) and label.FindAttribute(
-            TDataStd_Name.GetID_s(), std_name
-        ):
-            name = TCollection_AsciiString(std_name.Get()).ToCString()
+        if label.IsAttribute(TDataStd_Name.GetID_s()):
+            found, std_name = label.FindAttribute(TDataStd_Name.GetID_s())
+            if found:
+                name = TCollection_AsciiString(std_name.Get()).ToCString()
         # Remove characters that cause ocp_vscode to fail
         clean_name = "".join(ch for ch in name if unicodedata.category(ch)[0] != "C")
         return clean_name.translate(str.maketrans(" .()", "____"))
@@ -206,7 +205,7 @@ def import_step(filename: PathLike | str | bytes) -> Compound:
 
     def build_assembly(parent_tdf_label: TDF_Label | None = None) -> list[Shape]:
         """Recursively extract object into an assembly"""
-        sub_tdf_labels = Sequence_TDF_Label()
+        sub_tdf_labels = NCollection_Sequence[TDF_Label]()
         if parent_tdf_label is None:
             shape_tool.GetFreeShapes(sub_tdf_labels)
         else:

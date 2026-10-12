@@ -47,17 +47,17 @@ import svgpathtools as PT
 from ezdxf import zoom
 from ezdxf.colors import RGB, aci2rgb
 from ezdxf.math import Vec2
-from OCP.BRepLib import BRepLib
-from OCP.BRepTools import BRepTools_WireExplorer
-from OCP.Geom import Geom_BezierCurve, Geom_BSplineCurve
-from OCP.GeomConvert import GeomConvert
-from OCP.GeomConvert import GeomConvert_BSplineCurveToBezierCurve
-from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt, gp_Vec, gp_XYZ
-from OCP.HLRAlgo import HLRAlgo_Projector
-from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
-from OCP.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopoDS import TopoDS
+from nanocct.BRepLib import BRepLib
+from nanocct.BRepTools import BRepTools_WireExplorer
+from nanocct.Geom import Geom_BezierCurve, Geom_BSplineCurve
+from nanocct.GeomConvert import GeomConvert
+from nanocct.GeomConvert import GeomConvert_BSplineCurveToBezierCurve
+from nanocct.gp import gp_Ax2, gp_Dir, gp_Pnt, gp_Vec, gp_XYZ
+from nanocct.HLRAlgo import HLRAlgo_Projector
+from nanocct.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
+from nanocct.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
+from nanocct.TopExp import TopExp_Explorer
+import nanocct.TopoDS as TopoDS
 from typing_extensions import Self, sentinel
 
 from build123d.build_enums import Unit, GeomType

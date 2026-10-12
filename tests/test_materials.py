@@ -41,13 +41,14 @@ from bd_materials import (
     wood,
 )
 from bd_materials.core import Range
-from OCP.Message import Message_ProgressRange
-from OCP.RWGltf import RWGltf_CafReader
-from OCP.TCollection import TCollection_AsciiString, TCollection_ExtendedString
-from OCP.TDataStd import TDataStd_Name
-from OCP.collections import Sequence_TDF_Label
-from OCP.TDocStd import TDocStd_Document
-from OCP.XCAFDoc import XCAFDoc_DocumentTool, XCAFDoc_VisMaterialPBR
+from nanocct.Message import Message_ProgressRange
+from nanocct.RWGltf import RWGltf_CafReader
+from nanocct.TCollection import TCollection_AsciiString, TCollection_ExtendedString
+from nanocct.TDataStd import TDataStd_Name
+from nanocct.NCollection import NCollection_Sequence
+from nanocct.TDF import TDF_Label
+from nanocct.TDocStd import TDocStd_Document
+from nanocct.XCAFDoc import XCAFDoc_DocumentTool, XCAFDoc_VisMaterialPBR
 
 from build123d.build_constants import G_PER_LB
 from build123d.build_enums import Unit
@@ -347,12 +348,12 @@ def read_gltf(path: str) -> TDocStd_Document:
 
 def gltf_shape_names(doc: TDocStd_Document) -> list[str]:
     """Names of the free shapes (the glTF nodes) in an XCAF document."""
-    labels = Sequence_TDF_Label()
+    labels = NCollection_Sequence[TDF_Label]()
     XCAFDoc_DocumentTool.ShapeTool_s(doc.Main()).GetFreeShapes(labels)
     names = []
     for i in range(1, labels.Length() + 1):
-        name = TDataStd_Name()
-        if labels.Value(i).FindAttribute(TDataStd_Name.GetID_s(), name):
+        found, name = labels.Value(i).FindAttribute(TDataStd_Name.GetID_s())
+        if found:
             names.append(name.Get().ToExtString())
     return names
 
@@ -373,7 +374,7 @@ def srgb_to_linear(channel: float) -> float:
 def gltf_pbr_materials(doc: TDocStd_Document) -> list[XCAFDoc_VisMaterialPBR]:
     """Metallic-roughness material definitions in an XCAF document."""
     tool = XCAFDoc_DocumentTool.VisMaterialTool_s(doc.Main())
-    labels = Sequence_TDF_Label()
+    labels = NCollection_Sequence[TDF_Label]()
     tool.GetMaterials(labels)
     return [
         tool.GetMaterial_s(labels.Value(i)).PbrMaterial()

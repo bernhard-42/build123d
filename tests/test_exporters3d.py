@@ -40,7 +40,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import requests
-from OCP.Standard import Standard_Failure
+from nanocct.Standard import Standard_Failure
 
 from build123d.build_common import GridLocations
 from build123d.build_enums import Unit

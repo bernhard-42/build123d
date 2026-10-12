@@ -31,7 +31,7 @@ import copy
 import unittest
 
 import numpy as np
-from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt
+from nanocct.gp import gp_Ax1, gp_Dir, gp_Pnt
 from build123d.geometry import Axis, Location, Plane, Vector
 from build123d.topology import Edge, Vertex
 

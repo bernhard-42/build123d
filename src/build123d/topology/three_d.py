@@ -61,22 +61,22 @@ from typing import TYPE_CHECKING, ClassVar, cast
 
 from bd_materials import FinishedMaterial
 
-import OCP.TopAbs as ta
-from OCP.BRep import BRep_Builder
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
-from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepFeat import BRepFeat_MakeDPrism
-from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
-from OCP.BRepGProp import BRepGProp_Face
-from OCP.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Skin
-from OCP.BRepOffsetAPI import (
+import nanocct.TopAbs as ta
+from nanocct.BRep import BRep_Builder
+from nanocct.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
+from nanocct.BRepClass3d import BRepClass3d_SolidClassifier
+from nanocct.BRepExtrema import BRepExtrema_DistShapeShape
+from nanocct.BRepFeat import BRepFeat_MakeDPrism
+from nanocct.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
+from nanocct.BRepGProp import BRepGProp_Face
+from nanocct.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Skin
+from nanocct.BRepOffsetAPI import (
     BRepOffsetAPI_DraftAngle,
     BRepOffsetAPI_MakePipeShell,
     BRepOffsetAPI_MakeThickSolid,
 )
-from OCP.BRepPrimAPI import (
+from nanocct.BRepPrimAPI import (
     BRepPrimAPI_MakeBox,
     BRepPrimAPI_MakeCone,
     BRepPrimAPI_MakeCylinder,
@@ -86,15 +86,14 @@ from OCP.BRepPrimAPI import (
     BRepPrimAPI_MakeTorus,
     BRepPrimAPI_MakeWedge,
 )
-from OCP.GeomAbs import GeomAbs_Intersection, GeomAbs_JoinType
-from OCP.gp import gp_Ax2, gp_Pln, gp_Pnt, gp_Vec
-from OCP.GProp import GProp_GProps
-from OCP.ShapeFix import ShapeFix_Solid
-from OCP.Standard import Standard_Failure, Standard_TypeMismatch
-from OCP.StdFail import StdFail_NotDone
-from OCP.TopExp import TopExp, TopExp_Explorer
-from OCP.TopoDS import (
-    TopoDS,
+from nanocct.GeomAbs import GeomAbs_Intersection, GeomAbs_JoinType
+from nanocct.gp import gp_Ax2, gp_Pln, gp_Pnt, gp_Vec
+from nanocct.GProp import GProp_GProps
+from nanocct.ShapeFix import ShapeFix_Solid
+from nanocct.Standard import Standard_Failure, Standard_TypeMismatch
+from nanocct.StdFail import StdFail_NotDone
+from nanocct.TopExp import TopExp, TopExp_Explorer
+from nanocct.TopoDS import (
     TopoDS_Compound,
     TopoDS_Face,
     TopoDS_Iterator,
@@ -103,10 +102,9 @@ from OCP.TopoDS import (
     TopoDS_Solid,
     TopoDS_Wire,
 )
-from OCP.collections import (
-    IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-    List_TopoDS_Shape,
-)
+import nanocct.TopoDS as TopoDS
+from nanocct.NCollection import NCollection_IndexedDataMap, NCollection_List
+from nanocct.TopTools import TopTools_ShapeMapHasher
 
 from build123d.build_enums import (
     CenterOf,
@@ -256,7 +254,7 @@ class Mixin3D(Shape[TOPODS]):
 
         # make a edge --> faces mapping
         edge_face_map = (
-            IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+            NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
         )
         TopExp.MapShapesAndAncestors_s(
             self.wrapped, ta.TopAbs_EDGE, ta.TopAbs_FACE, edge_face_map
@@ -420,7 +418,7 @@ class Mixin3D(Shape[TOPODS]):
             Kind.INTERSECTION: GeomAbs_JoinType.GeomAbs_Intersection,
         }
 
-        occ_faces_list = List_TopoDS_Shape()
+        occ_faces_list = NCollection_List[TopoDS_Shape]()
         for face in faces:
             occ_faces_list.Append(face.wrapped)
 
@@ -664,7 +662,7 @@ class Mixin3D(Shape[TOPODS]):
             Kind.TANGENT: GeomAbs_JoinType.GeomAbs_Tangent,
         }
 
-        occ_faces_list = List_TopoDS_Shape()
+        occ_faces_list = NCollection_List[TopoDS_Shape]()
         for face in openings:
             occ_faces_list.Append(face.wrapped)
 

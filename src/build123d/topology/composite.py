@@ -63,11 +63,11 @@ from typing_extensions import Self
 
 from bd_materials import FinishedMaterial
 
-import OCP.TopAbs as ta
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse
-from OCP.Font import Font_SystemFont
-from OCP.gp import gp_Ax3
-from OCP.Graphic3d import (
+import nanocct.TopAbs as ta
+from nanocct.BRepAlgoAPI import BRepAlgoAPI_Fuse
+from nanocct.Font import Font_SystemFont
+from nanocct.gp import gp_Ax3
+from nanocct.Graphic3d import (
     Graphic3d_HTA_LEFT,
     Graphic3d_HTA_CENTER,
     Graphic3d_HTA_RIGHT,
@@ -76,16 +76,16 @@ from OCP.Graphic3d import (
     Graphic3d_VTA_TOP,
     Graphic3d_VTA_TOPFIRSTLINE,
 )
-from OCP.GProp import GProp_GProps
-from OCP.NCollection import NCollection_String
-from OCP.StdPrs import StdPrs_BRepTextBuilder as Font_BRepTextBuilder, StdPrs_BRepFont
-from OCP.TopAbs import TopAbs_ShapeEnum
-from OCP.TopoDS import (
-    TopoDS,
+from nanocct.GProp import GProp_GProps
+from nanocct.NCollection import NCollection_String
+from nanocct.StdPrs import StdPrs_BRepTextBuilder as Font_BRepTextBuilder, StdPrs_BRepFont
+from nanocct.TopAbs import TopAbs_ShapeEnum
+from nanocct.TopoDS import (
     TopoDS_Builder,
     TopoDS_Compound,
     TopoDS_Iterator,
 )
+import nanocct.TopoDS as TopoDS
 from anytree import PreOrderIter
 from build123d.build_enums import Align, CenterOf, FontStyle, Select, TextAlign, Unit
 from build123d.geometry import (

@@ -32,7 +32,7 @@ import os
 import unittest
 from random import uniform
 
-from OCP.gp import (
+from nanocct.gp import (
     gp_Ax1,
     gp_Dir,
     gp_EulerSequence,

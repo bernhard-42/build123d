@@ -46,13 +46,13 @@ from build123d.operations_generic import fillet
 from build123d.exporters3d import export_step
 from build123d.importers import import_step
 from build123d.topology import Edge, Face, Solid, Vertex, Wire
-from OCP.BRepAdaptor import BRepAdaptor_CompCurve
-from OCP.BRepBuilderAPI import (
+from nanocct.BRepAdaptor import BRepAdaptor_CompCurve
+from nanocct.BRepBuilderAPI import (
     BRepBuilderAPI_EmptyWire,
     BRepBuilderAPI_NonManifoldWire,
 )
-from OCP.gp import gp_Pnt
-from OCP.TopoDS import TopoDS
+from nanocct.gp import gp_Pnt
+import nanocct.TopoDS as TopoDS
 
 
 class TestWire(unittest.TestCase):

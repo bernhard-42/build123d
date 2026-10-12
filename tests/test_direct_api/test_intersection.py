@@ -1175,8 +1175,8 @@ class TestEmptyCompoundIntersect:
 
         Early return when compound has no elements.
         """
-        from OCP.TopoDS import TopoDS_Compound
-        from OCP.BRep import BRep_Builder
+        from nanocct.TopoDS import TopoDS_Compound
+        from nanocct.BRep import BRep_Builder
 
         # Create an actual empty OCCT compound (has wrapped but no children)
         builder = BRep_Builder()
@@ -1190,8 +1190,8 @@ class TestEmptyCompoundIntersect:
 
     def test_empty_compound_intersect_with_face(self):
         """Empty Compound.intersect(Face) returns None."""
-        from OCP.TopoDS import TopoDS_Compound
-        from OCP.BRep import BRep_Builder
+        from nanocct.TopoDS import TopoDS_Compound
+        from nanocct.BRep import BRep_Builder
 
         # Create an actual empty OCCT compound
         builder = BRep_Builder()

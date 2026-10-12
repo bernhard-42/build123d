@@ -33,7 +33,7 @@ from random import uniform
 from unittest.mock import PropertyMock, patch
 
 import numpy as np
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+from nanocct.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
 from anytree import PreOrderIter
 from build123d.build_enums import CenterOf, GeomType, Keep, Transition
 from build123d.geometry import (
@@ -879,7 +879,7 @@ class TestShapeCast(unittest.TestCase):
                 self.assertIsInstance(caller.cast(solid), Solid)
 
     def test_unregistered_type_is_reported(self):
-        from OCP.TopoDS import TopoDS_Shape
+        from nanocct.TopoDS import TopoDS_Shape
 
         registered = dict(Shape.shape_constructors)
         try:
@@ -890,7 +890,7 @@ class TestShapeCast(unittest.TestCase):
             Shape.shape_constructors.update(registered)
 
     def test_registry_covers_every_wrapped_type(self):
-        import OCP.TopAbs as ta
+        import nanocct.TopAbs as ta
 
         expected = {
             ta.TopAbs_VERTEX,

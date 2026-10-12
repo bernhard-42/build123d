@@ -1,11 +1,11 @@
 from typing import Optional
 import unittest
 
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace
-from OCP.GProp import GProp_GProps
-from OCP.BRepGProp import BRepGProp
-from OCP.gp import gp_Pnt, gp_Pln
-from OCP.TopoDS import TopoDS_Face, TopoDS_Shape
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace
+from nanocct.GProp import GProp_GProps
+from nanocct.BRepGProp import BRepGProp
+from nanocct.gp import gp_Pnt, gp_Pln
+from nanocct.TopoDS import TopoDS_Face, TopoDS_Shape
 from build123d.build_enums import ContinuityLevel, GeomType, SortBy
 
 from build123d.objects_part import Box

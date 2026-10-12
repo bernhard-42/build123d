@@ -33,8 +33,8 @@ from collections.abc import Iterable
 from math import radians, tan
 from typing import TypeAlias, cast
 
-from OCP.Standard import Standard_ConstructionError, Standard_Failure
-from OCP.StdFail import StdFail_NotDone
+from nanocct.Standard import Standard_ConstructionError, Standard_Failure
+from nanocct.StdFail import StdFail_NotDone
 from typing_extensions import deprecated
 
 from build123d.build_common import (

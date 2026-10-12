@@ -57,15 +57,15 @@ from typing import (
 import numpy as np
 import webcolors  # type: ignore
 from typing_extensions import deprecated
-from OCP.Bnd import Bnd_Box, Bnd_OBB
-from OCP.BRep import BRep_Tool
-from OCP.BRepBndLib import BRepBndLib
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform
-from OCP.BRepGProp import BRepGProp, BRepGProp_Face  # used for mass calculation
-from OCP.BRepTools import BRepTools
-from OCP.Geom import Geom_BoundedSurface, Geom_ElementarySurface, Geom_Line, Geom_Plane
-from OCP.GeomAPI import GeomAPI_IntCS, GeomAPI_IntSS, GeomAPI_ProjectPointOnSurf
-from OCP.gp import (
+from nanocct.Bnd import Bnd_Box, Bnd_OBB
+from nanocct.BRep import BRep_Tool
+from nanocct.BRepBndLib import BRepBndLib
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform
+from nanocct.BRepGProp import BRepGProp, BRepGProp_Face  # used for mass calculation
+from nanocct.BRepTools import BRepTools
+from nanocct.Geom import Geom_BoundedSurface, Geom_ElementarySurface, Geom_Line, Geom_Plane
+from nanocct.GeomAPI import GeomAPI_IntCS, GeomAPI_IntSS, GeomAPI_ProjectPointOnSurf
+from nanocct.gp import (
     gp_Ax1,
     gp_Ax2,
     gp_Ax3,
@@ -83,11 +83,12 @@ from OCP.gp import (
 )
 
 # properties used to store mass calculation result
-from OCP.GProp import GProp_GProps
-from OCP.Quantity import Quantity_Color, Quantity_ColorRGBA, Quantity_TypeOfColor
-from OCP.TopAbs import TopAbs_ShapeEnum
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Face, TopoDS_Shape, TopoDS_Vertex
+from nanocct.GProp import GProp_GProps
+from nanocct.Quantity import Quantity_Color, Quantity_ColorRGBA, Quantity_TypeOfColor
+from nanocct.TopAbs import TopAbs_ShapeEnum
+from nanocct.TopLoc import TopLoc_Location
+from nanocct.TopoDS import TopoDS_Edge, TopoDS_Face, TopoDS_Shape, TopoDS_Vertex
+import nanocct.TopoDS as TopoDS
 
 from build123d.build_enums import Align, Align2D, Align3D, Extrinsic, Intrinsic
 
@@ -716,7 +717,7 @@ class Axis(metaclass=AxisMeta):
                 raise ValueError(f"Invalid edge argument: {edge}")
 
             topods_edge: TopoDS_Edge = edge.wrapped  # type: ignore[annotation-unchecked]
-            curve = BRep_Tool.Curve_s(topods_edge, float(), float())
+            curve = BRep_Tool.Curve_s(topods_edge)[0]
             param_min, _ = BRep_Tool.Range_s(topods_edge)
             origin_pnt = gp_Pnt()
             tangent_vec = gp_Vec()

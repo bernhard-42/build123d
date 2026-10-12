@@ -31,7 +31,7 @@ import copy
 import math
 import unittest
 
-from OCP.gp import gp_Vec, gp_XYZ
+from nanocct.gp import gp_Vec, gp_XYZ
 from build123d.geometry import Axis, Location, Matrix, Plane, Pos, Vector
 from build123d.topology import Solid, Vertex
 

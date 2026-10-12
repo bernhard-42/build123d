@@ -29,8 +29,8 @@ license:
 import math
 
 import pytest
-from OCP.BRep import BRep_Tool
-from OCP.gp import gp_Pnt2d
+from nanocct.BRep import BRep_Tool
+from nanocct.gp import gp_Pnt2d
 
 from build123d import Axis, Edge, Plane, Tangency, Vector
 from build123d.build_enums import GeomType
@@ -95,7 +95,7 @@ def test_two_constrained_circles_tangents1(unit_circle):
         # Tangent lines should not intersect the circle interior
         dmin = c1.distance_to(ln)
         assert dmin >= -1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_two_constrained_circles_tangents2(unit_circle):
@@ -112,7 +112,7 @@ def test_two_constrained_circles_tangents2(unit_circle):
         # Tangent lines should not intersect the circle interior
         dmin = c1.distance_to(ln)
         assert dmin >= -1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_curve_and_point_tangent(unit_circle):
@@ -127,7 +127,7 @@ def test_curve_and_point_tangent(unit_circle):
         # It should also touch the circle at exactly one point
         dist_to_circle = unit_circle.distance_to(ln)
         assert math.isclose(dist_to_circle, 0.0, abs_tol=TOLERANCE)
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_invalid_tangent_raises(unit_circle):
@@ -162,7 +162,7 @@ def test_oriented_tangents_with_x_axis(unit_circle, angle_deg):
         unit_circle, Axis((0, -2), (1, 0)), 0, edge_factory=Edge
     )
     assert len(lines) == 0
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_oriented_tangents_with_y_axis(unit_circle):
@@ -173,7 +173,7 @@ def test_oriented_tangents_with_y_axis(unit_circle):
     # They should roughly touch the circle (tangent distance ≈ 0)
     for ln in lines:
         assert unit_circle.distance_to(ln) < 1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_oriented_constrained_tangents_with_y_axis(unit_circle):
@@ -184,7 +184,7 @@ def test_oriented_constrained_tangents_with_y_axis(unit_circle):
     assert len(lines) == 1
     for ln in lines:
         assert unit_circle.distance_to(ln) < 1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_invalid_oriented_tangent_raises(unit_circle):
@@ -218,7 +218,7 @@ def test_make_constrained_lines0(unit_circle):
     assert len(lines) == 4
     for ln in lines:
         assert unit_circle.distance_to(ln) < 1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_make_constrained_lines1(unit_circle):
@@ -226,7 +226,7 @@ def test_make_constrained_lines1(unit_circle):
     assert len(lines) == 2
     for ln in lines:
         assert unit_circle.distance_to(ln) < 1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_make_constrained_lines3(unit_circle):
@@ -235,7 +235,7 @@ def test_make_constrained_lines3(unit_circle):
     for ln in lines:
         assert unit_circle.distance_to(ln) < 1e-6
         assert abs((ln @ 1).Y) < 1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_make_constrained_lines4(unit_circle):
@@ -244,7 +244,7 @@ def test_make_constrained_lines4(unit_circle):
     for ln in lines:
         assert unit_circle.distance_to(ln) < 1e-6
         assert abs((ln @ 1).X) < 1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_make_constrained_lines5(unit_circle):
@@ -254,7 +254,7 @@ def test_make_constrained_lines5(unit_circle):
     assert len(lines) == 1
     for ln in lines:
         assert unit_circle.distance_to(ln) < 1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_make_constrained_lines6(unit_circle):
@@ -264,7 +264,7 @@ def test_make_constrained_lines6(unit_circle):
     assert len(lines) == 1
     for ln in lines:
         assert unit_circle.distance_to(ln) < 1e-6
-    assert all(BRep_Tool.Curve_s(e.wrapped, float(), float()) for e in lines)
+    assert all(BRep_Tool.Curve_s(e.wrapped)[0] for e in lines)
 
 
 def test_make_constrained_lines_raises(unit_circle):

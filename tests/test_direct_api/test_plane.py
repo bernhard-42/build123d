@@ -33,11 +33,11 @@ import random
 import unittest
 import warnings
 
-from OCP.gp import gp_Ax2
-from OCP.TopoDS import TopoDS_Builder, TopoDS_CompSolid
+from nanocct.gp import gp_Ax2
+from nanocct.TopoDS import TopoDS_Builder, TopoDS_CompSolid
 import numpy as np
-from OCP.BRepGProp import BRepGProp
-from OCP.GProp import GProp_GProps
+from nanocct.BRepGProp import BRepGProp
+from nanocct.GProp import GProp_GProps
 from build123d.build_common import Locations
 from build123d.build_enums import Align, Extrinsic, GeomType, Intrinsic, Mode
 from build123d.build_part import BuildPart

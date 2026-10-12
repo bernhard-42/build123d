@@ -28,11 +28,11 @@ license:
 
 import unittest
 
-from OCP.Bnd import Bnd_Box
+from nanocct.Bnd import Bnd_Box
 from build123d.geometry import BoundBox, Vector
 from build123d.topology import Solid, Vertex
 
-from OCP.TopoDS import TopoDS_Shape
+from nanocct.TopoDS import TopoDS_Shape
 
 
 class TestBoundBox(unittest.TestCase):

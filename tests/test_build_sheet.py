@@ -4,8 +4,8 @@ import unittest
 from math import asin, cos, degrees, pi, radians, sin, sqrt, tan
 from unittest.mock import PropertyMock, patch
 
-from OCP.BRepGProp import BRepGProp
-from OCP.GProp import GProp_GProps
+from nanocct.BRepGProp import BRepGProp
+from nanocct.GProp import GProp_GProps
 
 from build123d import *
 from build123d.geometry import TOLERANCE

@@ -63,15 +63,15 @@ from typing import cast as tcast
 from typing import overload
 
 import numpy as np
-import OCP.TopAbs as ta
-from OCP.BOPAlgo import BOPAlgo_Splitter
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve
-from OCP.BRepAlgoAPI import (
+import nanocct.TopAbs as ta
+from nanocct.BOPAlgo import BOPAlgo_Splitter
+from nanocct.BRep import BRep_Tool
+from nanocct.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve
+from nanocct.BRepAlgoAPI import (
     BRepAlgoAPI_Common,
     BRepAlgoAPI_Section,
 )
-from OCP.BRepBuilderAPI import (
+from nanocct.BRepBuilderAPI import (
     BRepBuilderAPI_DisconnectedWire,
     BRepBuilderAPI_EmptyWire,
     BRepBuilderAPI_MakeEdge,
@@ -82,28 +82,28 @@ from OCP.BRepBuilderAPI import (
     BRepBuilderAPI_NonManifoldWire,
     BRepBuilderAPI_Transform,
 )
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape, BRepExtrema_SupportType
-from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet2d
-from OCP.BRepGProp import BRepGProp, BRepGProp_Face
-from OCP.BRepLib import BRepLib, BRepLib_FindSurface
-from OCP.BRepLProp import BRepLProp
-from OCP.BRepOffset import BRepOffset_MakeOffset
-from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
-from OCP.BRepProj import BRepProj_Projection
-from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
-from OCP.Extrema import Extrema_ExtPC
-from OCP.GC import (
+from nanocct.BRepExtrema import BRepExtrema_DistShapeShape, BRepExtrema_SupportType
+from nanocct.BRepFilletAPI import BRepFilletAPI_MakeFillet2d
+from nanocct.BRepGProp import BRepGProp, BRepGProp_Face
+from nanocct.BRepLib import BRepLib, BRepLib_FindSurface
+from nanocct.BRepLProp import BRepLProp
+from nanocct.BRepOffset import BRepOffset_MakeOffset
+from nanocct.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
+from nanocct.BRepProj import BRepProj_Projection
+from nanocct.BRepTools import BRepTools, BRepTools_WireExplorer
+from nanocct.Extrema import Extrema_ExtPC
+from nanocct.GC import (
     GC_MakeArcOfCircle,
     GC_MakeArcOfEllipse,
     GC_MakeArcOfHyperbola,
     GC_MakeArcOfParabola,
 )
-from OCP.GCPnts import (
+from nanocct.GCPnts import (
     GCPnts_AbscissaPoint,
     GCPnts_QuasiUniformDeflection,
     GCPnts_UniformDeflection,
 )
-from OCP.Geom import (
+from nanocct.Geom import (
     Geom_BezierCurve,
     Geom_BSplineCurve,
     Geom_ConicalSurface,
@@ -113,13 +113,13 @@ from OCP.Geom import (
     Geom_Surface,
     Geom_TrimmedCurve,
 )
-from OCP.Geom2d import (
+from nanocct.Geom2d import (
     Geom2d_Curve,
     Geom2d_Line,
     Geom2d_TrimmedCurve,
 )
-from OCP.Geom2dAPI import Geom2dAPI_InterCurveCurve
-from OCP.GeomAbs import (
+from nanocct.Geom2dAPI import Geom2dAPI_InterCurveCurve
+from nanocct.GeomAbs import (
     GeomAbs_C0,
     GeomAbs_C1,
     GeomAbs_C2,
@@ -130,22 +130,22 @@ from OCP.GeomAbs import (
     GeomAbs_G2,
     GeomAbs_JoinType,
 )
-from OCP.GeomAdaptor import GeomAdaptor_Curve
-from OCP.GeomAPI import (
+from nanocct.GeomAdaptor import GeomAdaptor_Curve
+from nanocct.GeomAPI import (
     GeomAPI_Interpolate,
     GeomAPI_PointsToBSpline,
     GeomAPI_ProjectPointOnCurve,
 )
-from OCP.GeomConvert import (
+from nanocct.GeomConvert import (
     GeomConvert_ApproxCurve,
     GeomConvert_CompCurveToBSplineCurve,
 )
-from OCP.GeomFill import (
+from nanocct.GeomFill import (
     GeomFill_CorrectedFrenet,
     GeomFill_Frenet,
     GeomFill_TrihedronLaw,
 )
-from OCP.gp import (
+from nanocct.gp import (
     gp_Ax1,
     gp_Ax2,
     gp_Ax3,
@@ -160,31 +160,26 @@ from OCP.gp import (
     gp_Trsf,
     gp_Vec,
 )
-from OCP.GProp import GProp_GProps
-from OCP.HLRAlgo import HLRAlgo_Projector
-from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
-from OCP.ShapeAnalysis import ShapeAnalysis_FreeBounds
-from OCP.ShapeFix import ShapeFix_Shape, ShapeFix_Wireframe
-from OCP.Standard import Standard_ConstructionError
-from OCP.collections import (
-    Array1_double,
-    Array1_gp_Pnt,
-    Array1_gp_Vec,
-    Array1_int,
-    HArray1_bool,
-    HArray1_double,
-    HArray1_gp_Pnt,
-    HSequence_TopoDS_Shape,
-    IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-    IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher,
-    List_TopoDS_Shape,
-    Map_TopoDS_Shape_TopTools_ShapeMapHasher,
+from nanocct.GProp import GProp_GProps
+from nanocct.HLRAlgo import HLRAlgo_Projector
+from nanocct.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
+from nanocct.ShapeAnalysis import ShapeAnalysis_FreeBounds
+from nanocct.ShapeFix import ShapeFix_Shape, ShapeFix_Wireframe
+from nanocct.Standard import Standard_ConstructionError
+from nanocct.NCollection import (
+    NCollection_Array1,
+    NCollection_HArray1,
+    NCollection_HSequence,
+    NCollection_IndexedDataMap,
+    NCollection_IndexedMap,
+    NCollection_List,
+    NCollection_Map,
 )
-from OCP.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
-from OCP.TopExp import TopExp, TopExp_Explorer
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import (
-    TopoDS,
+from nanocct.TopTools import TopTools_ShapeMapHasher
+from nanocct.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
+from nanocct.TopExp import TopExp, TopExp_Explorer
+from nanocct.TopLoc import TopLoc_Location
+from nanocct.TopoDS import (
     TopoDS_Compound,
     TopoDS_Edge,
     TopoDS_Face,
@@ -192,6 +187,7 @@ from OCP.TopoDS import (
     TopoDS_Vertex,
     TopoDS_Wire,
 )
+import nanocct.TopoDS as TopoDS
 from scipy.optimize import minimize_scalar
 from scipy.spatial import ConvexHull
 from typing_extensions import Self
@@ -1905,12 +1901,12 @@ class Edge(Mixin1D[TopoDS_Edge]):
         cntl_gp_pnts = [Vector(cntl_pnt).to_pnt() for cntl_pnt in cntl_pnts]
 
         # The poles are stored in an OCCT Array object
-        poles = Array1_gp_Pnt(1, len(cntl_gp_pnts))
+        poles = NCollection_Array1[gp_Pnt](1, len(cntl_gp_pnts))
         for i, cntl_gp_pnt in enumerate(cntl_gp_pnts):
             poles.SetValue(i + 1, cntl_gp_pnt)
 
         if weights:
-            pole_weights = Array1_double(1, len(weights))
+            pole_weights = NCollection_Array1[float](1, len(weights))
             for i, weight in enumerate(weights):
                 pole_weights.SetValue(i + 1, float(weight))
             bezier_curve = Geom_BezierCurve(poles, pole_weights)
@@ -2666,7 +2662,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         point_vectors = [Vector(point) for point in points]
         if tangents:
             tangent_vectors = tuple(Vector(v) for v in tangents)
-        pnts = HArray1_gp_Pnt(1, len(point_vectors))
+        pnts = NCollection_HArray1[gp_Pnt](1, len(point_vectors))
         for i, point in enumerate(point_vectors):
             pnts.SetValue(i + 1, point.to_pnt())
 
@@ -2679,7 +2675,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
                     "(plus one if periodic), or none specified. Parameter count: "
                     f"{len(parameters)}, point count: {len(point_vectors)}"
                 )
-            parameters_array = HArray1_double(1, len(parameters))
+            parameters_array = NCollection_HArray1[float](1, len(parameters))
             for p_index, p_value in enumerate(parameters):
                 parameters_array.SetValue(p_index + 1, p_value)
 
@@ -2700,8 +2696,8 @@ class Edge(Mixin1D[TopoDS_Edge]):
                     )
 
                 # Specify a tangent for each interpolation point:
-                tangents_array = Array1_gp_Vec(1, len(tangent_vectors))
-                tangent_enabled_array = HArray1_bool(1, len(tangent_vectors))
+                tangents_array = NCollection_Array1[gp_Vec](1, len(tangent_vectors))
+                tangent_enabled_array = NCollection_HArray1[bool](1, len(tangent_vectors))
                 for t_index, t_value in enumerate(tangent_vectors):
                     tangent_enabled_array.SetValue(t_index + 1, t_value is not None)
                     tangent_vec = t_value if t_value is not None else Vector()
@@ -2760,21 +2756,21 @@ class Edge(Mixin1D[TopoDS_Edge]):
                 unique_knots.append(knot)
                 multiplicities.append(1)
 
-        poles_array = Array1_gp_Pnt(1, len(point_vectors))
+        poles_array = NCollection_Array1[gp_Pnt](1, len(point_vectors))
         for index, point in enumerate(point_vectors, start=1):
             poles_array.SetValue(index, point.to_pnt())
 
-        knots_array = Array1_double(1, len(unique_knots))
+        knots_array = NCollection_Array1[float](1, len(unique_knots))
         for index, knot in enumerate(unique_knots, start=1):
             knots_array.SetValue(index, float(knot))
 
-        multiplicities_array = Array1_int(1, len(multiplicities))
+        multiplicities_array = NCollection_Array1[int](1, len(multiplicities))
         for index, multiplicity in enumerate(multiplicities, start=1):
             multiplicities_array.SetValue(index, multiplicity)
 
         weights_list = list(weights) if weights is not None else []
         if weights_list:
-            weights_array = Array1_double(1, len(weights_list))
+            weights_array = NCollection_Array1[float](1, len(weights_list))
             for index, weight in enumerate(weights_list, start=1):
                 weights_array.SetValue(index, float(weight))
             spline_geom = Geom_BSplineCurve(
@@ -2826,7 +2822,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         Returns:
             Edge: spline
         """
-        pnts = HArray1_gp_Pnt(1, len(points))
+        pnts = NCollection_HArray1[gp_Pnt](1, len(points))
         for i, point in enumerate(points):
             pnts.SetValue(i + 1, Vector(point).to_pnt())
 
@@ -2978,21 +2974,9 @@ class Edge(Mixin1D[TopoDS_Edge]):
         pln_shape = BRepBuilderAPI_MakeFace(plane.wrapped).Face()
         edge_surface = BRep_Tool.Surface_s(pln_shape)
 
-        self_2d_curve: Geom2d_Curve = BRep_Tool.CurveOnPlane_s(
-            self.wrapped,
-            edge_surface,
-            TopLoc_Location(),
-            self.param_at(0),
-            self.param_at(1),
-        )
+        self_2d_curve: Geom2d_Curve = BRep_Tool.CurveOnPlane_s(self.wrapped, edge_surface, TopLoc_Location())[0]
         if other is not None and not other.is_empty:
-            edge_2d_curve: Geom2d_Curve = BRep_Tool.CurveOnPlane_s(
-                other.wrapped,
-                edge_surface,
-                TopLoc_Location(),
-                other.param_at(0),
-                other.param_at(1),
-            )
+            edge_2d_curve: Geom2d_Curve = BRep_Tool.CurveOnPlane_s(other.wrapped, edge_surface, TopLoc_Location())[0]
             intersector = Geom2dAPI_InterCurveCurve(
                 self_2d_curve, edge_2d_curve, tolerance
             )
@@ -3365,7 +3349,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         # end points.
 
         # Extract the normalized parameter using OCCT GeomAPI_ProjectPointOnCurve
-        curve = BRep_Tool.Curve_s(self.wrapped, float(), float())
+        curve = BRep_Tool.Curve_s(self.wrapped)[0]
         projector = GeomAPI_ProjectPointOnCurve(pnt.to_pnt(), curve)
         param = projector.LowerDistanceParameter()
         # Note that for some periodic curves the LowerDistanceParameter might
@@ -3480,7 +3464,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         if reconstruct:
             first: float = self.param_at(0)
             last: float = self.param_at(1)
-            curve = BRep_Tool.Curve_s(self._wrapped, first, last)
+            curve = BRep_Tool.Curve_s(self._wrapped)[0]
             first = curve.ReversedParameter(first)
             last = curve.ReversedParameter(last)
             topods_edge = BRepBuilderAPI_MakeEdge(curve.Reversed(), last, first).Edge()
@@ -3519,11 +3503,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         # Rebuild the edge
         trimmed_edge = Edge(
             BRepBuilderAPI_MakeEdge(
-                BRep_Tool.Curve_s(
-                    self.wrapped,
-                    comp_curve_start.FirstParameter(),
-                    comp_curve_start.LastParameter(),
-                ),
+                BRep_Tool.Curve_s(self.wrapped)[0],
                 *sorted([parm_start, parm_end]),
             ).Edge()
         )
@@ -3561,9 +3541,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         self_copy = copy.deepcopy(self)
         assert not self_copy.is_empty
 
-        new_curve = BRep_Tool.Curve_s(
-            self_copy.wrapped, self.param_at(0), self.param_at(1)
-        )
+        new_curve = BRep_Tool.Curve_s(self_copy.wrapped)[0]
 
         # Create an adaptor for the curve
         adaptor_curve = GeomAdaptor_Curve(new_curve)
@@ -3854,7 +3832,7 @@ class Wire(Mixin1D[TopoDS_Wire]):
             edges = placed_edges
 
         wire_builder = BRepBuilderAPI_MakeWire()
-        combined_edges = List_TopoDS_Shape()
+        combined_edges = NCollection_List[TopoDS_Shape]()
         for edge in edges:
             if not edge.is_empty:
                 combined_edges.Append(edge.wrapped)
@@ -3890,14 +3868,13 @@ class Wire(Mixin1D[TopoDS_Wire]):
             ShapeList[Wire]: Wires
         """
 
-        edges_in = HSequence_TopoDS_Shape()
-        wires_out = HSequence_TopoDS_Shape()
+        edges_in = NCollection_HSequence[TopoDS_Shape]()
 
         for edge in [e for w in wires for e in w.edges()]:
             if not edge.is_empty:
                 edges_in.Append(edge.wrapped)
 
-        ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(edges_in, tol, False, wires_out)
+        wires_out = ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(edges_in, tol, False)
 
         wires = ShapeList()
         for i in range(wires_out.Length()):
@@ -4182,7 +4159,7 @@ class Wire(Mixin1D[TopoDS_Wire]):
         chamfer_builder = BRepFilletAPI_MakeFillet2d(unchamfered_face)
 
         vertex_edge_map = (
-            IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+            NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
         )
         TopExp.MapShapesAndAncestors_s(
             unchamfered_face, ta.TopAbs_VERTEX, ta.TopAbs_EDGE, vertex_edge_map
@@ -4241,7 +4218,7 @@ class Wire(Mixin1D[TopoDS_Wire]):
         explorer = BRepTools_WireExplorer(self.wrapped)
 
         edge_list: ShapeList[Edge] = ShapeList()
-        explored = Map_TopoDS_Shape_TopTools_ShapeMapHasher()
+        explored = NCollection_Map[TopoDS_Shape, TopTools_ShapeMapHasher]()
         while explorer.More():
             explored_edge = explorer.Current()
             explored.Add(explored_edge)
@@ -4490,11 +4467,11 @@ class Wire(Mixin1D[TopoDS_Wire]):
             closest_topods_edge = tcast(
                 TopoDS_Edge, downcast(extrema.SupportOnShape2(1))
             )
-            closest_topods_edge_param = extrema.ParOnEdgeS2(1)[0]
+            closest_topods_edge_param = extrema.ParOnEdgeS2(1)
         elif supp_type == BRepExtrema_SupportType.BRepExtrema_IsVertex:
             v_hit = tcast(TopoDS_Vertex, downcast(extrema.SupportOnShape2(1)))
             vertex_edge_map = (
-                IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+                NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
             )
             TopExp.MapShapesAndAncestors_s(
                 self.wrapped, ta.TopAbs_VERTEX, ta.TopAbs_EDGE, vertex_edge_map
@@ -4796,7 +4773,7 @@ class Wire(Mixin1D[TopoDS_Wire]):
                 wire_explorer.Next()
                 continue
             param_min, param_max = BRep_Tool.Range_s(topods_edge)
-            new_curve = BRep_Tool.Curve_s(topods_edge, float(), float())
+            new_curve = BRep_Tool.Curve_s(topods_edge)[0]
             trimmed_curve = Geom_TrimmedCurve(new_curve, param_min, param_max)
 
             # Append this edge's trimmed curve into the composite spline.
@@ -4882,13 +4859,12 @@ def edges_to_wires(edges: Iterable[Edge], tol: float = 1e-6) -> ShapeList[Wire]:
 
     """
 
-    edges_in = HSequence_TopoDS_Shape()
-    wires_out = HSequence_TopoDS_Shape()
+    edges_in = NCollection_HSequence[TopoDS_Shape]()
 
     for edge in edges:
         if not edge.is_empty:
             edges_in.Append(edge.wrapped)
-    ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(edges_in, tol, False, wires_out)
+    wires_out = ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(edges_in, tol, False)
 
     wires: ShapeList[Wire] = ShapeList()
     for i in range(wires_out.Length()):
@@ -5022,8 +4998,8 @@ def _dihedral_convexity(
     """
     curve = BRepAdaptor_Curve(edge)
     first, last = curve.FirstParameter(), curve.LastParameter()
-    pcurve1 = BRep_Tool.CurveOnSurface_s(edge, face1, first, last)
-    pcurve2 = BRep_Tool.CurveOnSurface_s(edge, face2, first, last)
+    pcurve1 = BRep_Tool.CurveOnSurface_s(edge, face1)[0]
+    pcurve2 = BRep_Tool.CurveOnSurface_s(edge, face2)[0]
     reversed_in_face2 = (
         _edge_as_bounded_by(face2, edge).Orientation()
         == TopAbs_Orientation.TopAbs_REVERSED
@@ -5083,7 +5059,7 @@ def topo_explore_connected_faces(
 
     # make a edge --> faces mapping
     edge_face_map = (
-        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+        NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
     )
     TopExp.MapShapesAndAncestors_s(
         parent.wrapped, ta.TopAbs_EDGE, ta.TopAbs_FACE, edge_face_map
@@ -5100,7 +5076,7 @@ def topo_explore_connected_faces(
     relocation = relocation_between(parent_edge, edge.wrapped)
 
     # Query the map and select only unique faces
-    unique_face_map = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
+    unique_face_map = NCollection_IndexedMap[TopoDS_Shape, TopTools_ShapeMapHasher]()
     for face in list_shapes(edge_face_map.FindFromKey(parent_edge)):
         unique_face_map.Add(face)
     return [

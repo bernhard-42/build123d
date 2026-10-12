@@ -49,9 +49,9 @@ from build123d.topology import (
     Wire,
 )
 import build123d
-from OCP.BRepOffsetAPI import BRepOffsetAPI_DraftAngle
-from OCP.StdFail import StdFail_NotDone
-from OCP.TopAbs import TopAbs_Orientation
+from nanocct.BRepOffsetAPI import BRepOffsetAPI_DraftAngle
+from nanocct.StdFail import StdFail_NotDone
+from nanocct.TopAbs import TopAbs_Orientation
 
 
 class TestSolid(unittest.TestCase):

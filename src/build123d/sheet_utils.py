@@ -33,30 +33,30 @@ from collections import deque
 from dataclasses import dataclass
 from math import radians
 
-import OCP.GeomAbs as ga
-import OCP.TopAbs as ta
-from OCP.collections import (
-    IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-)
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Surface
-from OCP.BRepBuilderAPI import (
+import nanocct.GeomAbs as ga
+import nanocct.TopAbs as ta
+from nanocct.NCollection import NCollection_IndexedDataMap, NCollection_List
+from nanocct.TopoDS import TopoDS_Shape
+from nanocct.TopTools import TopTools_ShapeMapHasher
+from nanocct.BRep import BRep_Tool
+from nanocct.BRepAdaptor import BRepAdaptor_Surface
+from nanocct.BRepBuilderAPI import (
     BRepBuilderAPI_GTransform,
     BRepBuilderAPI_MakeEdge,
     BRepBuilderAPI_MakeFace,
 )
-from OCP.BRepCheck import BRepCheck_Analyzer
-from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
-from OCP.ShapeExtend import ShapeExtend_WireData
-from OCP.ShapeFix import ShapeFix_Face, ShapeFix_Shape, ShapeFix_Wire
-from OCP.TopExp import TopExp
-from OCP.TopoDS import (
-    TopoDS,
+from nanocct.BRepCheck import BRepCheck_Analyzer
+from nanocct.BRepTools import BRepTools, BRepTools_WireExplorer
+from nanocct.ShapeExtend import ShapeExtend_WireData
+from nanocct.ShapeFix import ShapeFix_Face, ShapeFix_Shape, ShapeFix_Wire
+from nanocct.TopExp import TopExp
+from nanocct.TopoDS import (
     TopoDS_Edge,
     TopoDS_Face,
     TopoDS_Shell,
     TopoDS_Wire,
 )
+import nanocct.TopoDS as TopoDS
 
 from build123d.build_enums import SheetSurface
 from build123d.geometry import TOLERANCE, Location, Matrix, Plane, Vector
@@ -211,7 +211,7 @@ def _uv_topods_edge(
         xy_surface = BRep_Tool.Surface_s(xy_face)
 
     first, last = BRep_Tool.Range_s(source_edge, source_face)
-    pcurve = BRep_Tool.CurveOnSurface_s(source_edge, source_face, first, last)
+    pcurve = BRep_Tool.CurveOnSurface_s(source_edge, source_face)[0]
     edge_builder = BRepBuilderAPI_MakeEdge(pcurve, xy_surface, first, last)
     if not edge_builder.IsDone():  # pragma: no cover
         raise ValueError("Unable to convert pcurve to a planar edge")
@@ -509,7 +509,7 @@ def _unfold_shell(
         key: [] for key in faces_by_key
     }
     edge_face_map = (
-        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+        NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
     )
     TopExp.MapShapesAndAncestors_s(shell, ta.TopAbs_EDGE, ta.TopAbs_FACE, edge_face_map)
     for raw_edge in _topods_entities(shell, "Edge"):

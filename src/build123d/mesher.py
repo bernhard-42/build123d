@@ -93,23 +93,25 @@ from os import PathLike, fsdecode
 from typing import Literal
 from uuid import UUID
 
-import OCP.TopAbs as ta
+import nanocct.TopAbs as ta
+import numpy as np
 from lib3mf import Lib3MF
-from OCP.BRep import BRep_Tool
-from OCP.BRepBuilderAPI import (
+from nanocct.BRep import BRep_Tool
+from nanocct.BRepBuilderAPI import (
     BRepBuilderAPI_MakeFace,
     BRepBuilderAPI_MakePolygon,
     BRepBuilderAPI_MakeSolid,
     BRepBuilderAPI_Sewing,
 )
-from OCP.BRepGProp import BRepGProp
-from OCP.BRepMesh import BRepMesh_IncrementalMesh
-from OCP.gp import gp_Pnt
-from OCP.GProp import GProp_GProps
-from OCP.TopAbs import TopAbs_ShapeEnum
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Shell
+from nanocct.BRepGProp import BRepGProp
+from nanocct.BRepMesh import BRepMesh_IncrementalMesh
+from nanocct.gp import gp_Pnt, gp_TrsfForm
+from nanocct.GProp import GProp_GProps
+from nanocct.TopAbs import TopAbs_ShapeEnum
+from nanocct.TopExp import TopExp_Explorer
+from nanocct.TopLoc import TopLoc_Location
+from nanocct.TopoDS import TopoDS_Compound, TopoDS_Shell
+import nanocct.TopoDS as TopoDS
 
 from build123d.build_enums import MeshType, Unit
 from build123d.geometry import TOLERANCE, Color
@@ -290,20 +292,22 @@ class Mesher:
             # Triangulate the face
             poly_triangulation = BRep_Tool.Triangulation_s(facet.wrapped, loc)
             trsf = loc.Transformation()
-            # Store the vertices in the triangulated face
+            # Store the vertices in the triangulated face: one zero-copy view (nanocct),
+            # transformed only for a located face
             node_count = poly_triangulation.NbNodes()
-            for i in range(1, node_count + 1):
-                gp_pnt = poly_triangulation.Node(i).Transformed(trsf)
-                pnt = (gp_pnt.X(), gp_pnt.Y(), gp_pnt.Z())
-                ocp_mesh_vertices.append(pnt)
+            nodes = np.asarray(poly_triangulation.InternalNodes())
+            if trsf.Form() != gp_TrsfForm.gp_Identity:
+                m = np.array([[trsf.Value(r, c) for c in range(1, 5)] for r in range(1, 4)])
+                nodes = nodes @ m[:, :3].T + m[:, 3]
+            ocp_mesh_vertices.extend(map(tuple, nodes.tolist()))
 
             # Store the triangles from the triangulated faces
             if not facet:
                 continue
             facet_reversed = facet.wrapped.Orientation() == ta.TopAbs_REVERSED
             order = [1, 3, 2] if facet_reversed else [1, 2, 3]
-            for tri in poly_triangulation.Triangles():
-                triangles.append([tri.Value(i) + offset - 1 for i in order])
+            tris = np.asarray(poly_triangulation.InternalTriangles())[:, [i - 1 for i in order]] + (offset - 1)
+            triangles.extend(tris.tolist())
             offset += node_count
         return ocp_mesh_vertices, triangles
 

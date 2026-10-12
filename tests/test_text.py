@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 from fontTools.ttLib import TTCollection, TTFont, newTable
 from fontTools.ttLib.tables._f_v_a_r import NamedInstance
-from OCP.TCollection import TCollection_AsciiString
+from nanocct.TCollection import TCollection_AsciiString
 
 from build123d import available_fonts, FontStyle
 from build123d.text import FONT_ASPECT, FontInfo, FontManager

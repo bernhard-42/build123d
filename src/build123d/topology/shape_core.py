@@ -71,17 +71,17 @@ from typing import cast as tcast
 from typing import overload
 
 import numpy as np
-import OCP.GeomAbs as ga
-import OCP.TopAbs as ta
+import nanocct.GeomAbs as ga
+import nanocct.TopAbs as ta
 from anytree import NodeMixin, RenderTree
 from IPython.lib.pretty import RepresentationPrinter, pretty
-from OCP.Bnd import Bnd_OBB
-from OCP.BOPAlgo import BOPAlgo_GlueEnum
-from OCP.BRep import BRep_TEdge, BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.GCPnts import GCPnts_AbscissaPoint
-from OCP.GeomAdaptor import GeomAdaptor_Curve
-from OCP.BRepAlgoAPI import (
+from nanocct.Bnd import Bnd_OBB
+from nanocct.BOPAlgo import BOPAlgo_GlueEnum
+from nanocct.BRep import BRep_TEdge, BRep_Tool
+from nanocct.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+from nanocct.GCPnts import GCPnts_AbscissaPoint
+from nanocct.GeomAdaptor import GeomAdaptor_Curve
+from nanocct.BRepAlgoAPI import (
     BRepAlgoAPI_BooleanOperation,
     BRepAlgoAPI_Common,
     BRepAlgoAPI_Cut,
@@ -89,7 +89,7 @@ from OCP.BRepAlgoAPI import (
     BRepAlgoAPI_Section,
     BRepAlgoAPI_Splitter,
 )
-from OCP.BRepBuilderAPI import (
+from nanocct.BRepBuilderAPI import (
     BRepBuilderAPI_Copy,
     BRepBuilderAPI_GTransform,
     BRepBuilderAPI_MakeFace,
@@ -100,28 +100,28 @@ from OCP.BRepBuilderAPI import (
     BRepBuilderAPI_Transform,
     BRepBuilderAPI_Transformed,
 )
-from OCP.BRepCheck import BRepCheck_Analyzer
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepGProp import BRepGProp, BRepGProp_Face
-from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
-from OCP.BRepMesh import BRepMesh_IncrementalMesh
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
-from OCP.BRepTools import BRepTools
-from OCP.gce import gce_MakeLin
-from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
-from OCP.GeomLib import GeomLib_IsPlanarSurface
-from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_TrsfForm, gp_Vec, gp_XYZ
-from OCP.GProp import GProp_GProps
-from OCP.ShapeAnalysis import ShapeAnalysis_Curve, ShapeAnalysis_Shell
-from OCP.ShapeCustom import ShapeCustom, ShapeCustom_RestrictionParameters
-from OCP.ShapeFix import ShapeFix_Shape
-from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-from OCP.Standard import Standard_Failure
-from OCP.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
-from OCP.TopExp import TopExp, TopExp_Explorer
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import (
-    TopoDS,
+from nanocct.BRepCheck import BRepCheck_Analyzer
+from nanocct.BRepExtrema import BRepExtrema_DistShapeShape
+from nanocct.BRepGProp import BRepGProp, BRepGProp_Face
+from nanocct.BRepIntCurveSurface import BRepIntCurveSurface_Inter
+from nanocct.BRepMesh import BRepMesh_IncrementalMesh
+from nanocct.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
+from nanocct.BRepTools import BRepTools
+from nanocct.gce import gce_MakeLin
+from nanocct.GeomAPI import GeomAPI_ProjectPointOnSurf
+from nanocct.GeomLib import GeomLib_IsPlanarSurface
+from nanocct.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_TrsfForm, gp_Vec, gp_XYZ
+from nanocct.GProp import GProp_GProps
+from nanocct.ShapeAnalysis import ShapeAnalysis_Curve, ShapeAnalysis_Shell
+from nanocct.ShapeCustom import ShapeCustom, ShapeCustom_RestrictionParameters
+from nanocct.ShapeFix import ShapeFix_Shape
+# OCCT #1541 workaround; back to nanocct.ShapeUpgrade once OCCT is fixed
+from nanocct.AddOns.ShapeClean import ShapeUpgrade_UnifySameDomain
+from nanocct.Standard import Standard_Failure
+from nanocct.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
+from nanocct.TopExp import TopExp, TopExp_Explorer
+from nanocct.TopLoc import TopLoc_Location
+from nanocct.TopoDS import (
     TopoDS_Builder,
     TopoDS_Compound,
     TopoDS_Edge,
@@ -133,11 +133,9 @@ from OCP.TopoDS import (
     TopoDS_Vertex,
     TopoDS_Wire,
 )
-from OCP.collections import (
-    IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-)
-from OCP.collections import List_TopoDS_Shape
-from OCP.TopTools import TopTools_ShapeMapHasher
+import nanocct.TopoDS as TopoDS
+from nanocct.NCollection import NCollection_IndexedDataMap, NCollection_List
+from nanocct.TopTools import TopTools_ShapeMapHasher
 from typing_extensions import Self, deprecated
 
 from bd_materials import FinishedMaterial, resolve as resolve_material
@@ -593,7 +591,7 @@ class Shape(NodeMixin, Generic[TOPODS]):
 
             # Create an empty indexed data map to store the edges and their corresponding faces.
             shape_map = (
-                IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+                NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
             )
 
             # Fill the map with edges and their associated faces in the given shape. Each edge in
@@ -2323,7 +2321,7 @@ class Shape(NodeMixin, Generic[TOPODS]):
         if keep in [Keep.INSIDE, Keep.OUTSIDE]:
             raise ValueError(f"{keep} is invalid")
 
-        shape_list = List_TopoDS_Shape()
+        shape_list = NCollection_List[TopoDS_Shape]()
         shape_list.Append(self.wrapped)
 
         # Define the splitting tool
@@ -2332,7 +2330,7 @@ class Shape(NodeMixin, Generic[TOPODS]):
             if isinstance(tool, Plane)
             else tool.wrapped
         )
-        tool_list = List_TopoDS_Shape()
+        tool_list = NCollection_List[TopoDS_Shape]()
         tool_list.Append(trim_tool)
 
         # Create the splitter algorithm
@@ -2451,30 +2449,17 @@ class Shape(NodeMixin, Generic[TOPODS]):
             trsf = loc.Transformation()
             reverse = face.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED
 
-            # add vertices
-            vertices += [
-                Vector(v.X(), v.Y(), v.Z())
-                for v in (
-                    poly.Node(i).Transformed(trsf) for i in range(1, poly.NbNodes() + 1)
-                )
-            ]
-            # add triangles
-            triangles += [
-                (
-                    (
-                        t.Value(1) + offset - 1,
-                        t.Value(3) + offset - 1,
-                        t.Value(2) + offset - 1,
-                    )
-                    if reverse
-                    else (
-                        t.Value(1) + offset - 1,
-                        t.Value(2) + offset - 1,
-                        t.Value(3) + offset - 1,
-                    )
-                )
-                for t in poly.Triangles()
-            ]
+            # add vertices: one zero-copy view (nanocct), transformed only for a located face
+            nodes = np.asarray(poly.InternalNodes())
+            if trsf.Form() != gp_TrsfForm.gp_Identity:
+                m = np.array([[trsf.Value(r, c) for c in range(1, 5)] for r in range(1, 4)])
+                nodes = nodes @ m[:, :3].T + m[:, 3]
+            vertices += [Vector(x, y, z) for x, y, z in nodes.tolist()]
+            # add triangles: one zero-copy view, OCCT's 1-based indices shifted to the offset
+            tris = np.asarray(poly.InternalTriangles()) + (offset - 1)
+            if reverse:
+                tris = tris[:, [0, 2, 1]]
+            triangles += [tuple(t) for t in tris.tolist()]
 
             offset += poly.NbNodes()
 
@@ -2563,21 +2548,16 @@ class Shape(NodeMixin, Generic[TOPODS]):
             trans = np.array([tr.X(), tr.Y(), tr.Z()])
 
             # Vertices — bulk extract via MapNodeArray + numpy transform
-            node_arr = poly.MapNodeArray()
-            coords = np.empty((nb_nodes, 3))
-            for i in range(1, nb_nodes + 1):
-                p = node_arr.Value(i)
-                coords[i - 1] = (p.X(), p.Y(), p.Z())
+            coords = np.asarray(poly.InternalNodes())  # zero-copy view (nanocct)
             transformed = coords @ rot.T + trans
             all_vertices.extend(Vector(row[0], row[1], row[2]) for row in transformed)
 
             # Normals — bulk extract + numpy rotate (no translation)
             if not poly.HasNormals():
                 poly.ComputeNormals()
-            norm_coords = np.empty((nb_nodes, 3))
-            for i in range(1, nb_nodes + 1):
-                d = poly.Normal(i)
-                norm_coords[i - 1] = (d.X(), d.Y(), d.Z())
+            # zero-copy float32 view (nanocct), normalised as poly.Normal(i) does by returning a gp_Dir
+            norm_coords = np.asarray(poly.InternalNormals()).astype(np.float64)
+            norm_coords /= np.linalg.norm(norm_coords, axis=1, keepdims=True)
             rotated_normals = norm_coords @ rot.T * reverse_factor
             all_normals.extend(
                 Vector(row[0], row[1], row[2]) for row in rotated_normals
@@ -2585,11 +2565,7 @@ class Shape(NodeMixin, Generic[TOPODS]):
 
             # UV coordinates — bulk extract via MapUVNodeArray + numpy normalize
             if poly.HasUVNodes():
-                uv_arr = poly.MapUVNodeArray()
-                uv_raw = np.empty((nb_nodes, 2))
-                for i in range(1, nb_nodes + 1):
-                    uv_pnt = uv_arr.Value(i)
-                    uv_raw[i - 1] = (uv_pnt.X(), uv_pnt.Y())
+                uv_raw = np.asarray(poly.InternalUVNodes())  # zero-copy view (nanocct)
 
                 uv_min = uv_raw.min(axis=0)
                 uv_max = uv_raw.max(axis=0)
@@ -2909,12 +2885,12 @@ class Shape(NodeMixin, Generic[TOPODS]):
         # The base of the operation
         base = args[0] if isinstance(args, (list, tuple)) else args
 
-        arg = List_TopoDS_Shape()
+        arg = NCollection_List[TopoDS_Shape]()
         for obj in args:
             if not obj.is_empty:
                 arg.Append(obj._wrapped)
 
-        tool = List_TopoDS_Shape()
+        tool = NCollection_List[TopoDS_Shape]()
         for obj in tools:
             if not obj.is_empty:
                 tool.Append(obj._wrapped)
@@ -3346,7 +3322,7 @@ def topo_distance_to(
     if peer_type == "Vertex":
         vertex_neighbors: dict[Shape, set[Shape]] = {peer: set() for peer in peers}
         vertex_edge_map = (
-            IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+            NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
         )
         TopExp.MapShapesAndAncestors_s(
             parent.wrapped,
@@ -3375,7 +3351,7 @@ def topo_distance_to(
                         vertex_neighbors[vertex_peer].add(neighbor)
     else:
         connector_peer_map = (
-            IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+            NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
         )
         TopExp.MapShapesAndAncestors_s(
             parent.wrapped,
@@ -4209,11 +4185,11 @@ def _topods_bool_op(
     """
     args = list(args)
     tools = list(tools)
-    arg = List_TopoDS_Shape()
+    arg = NCollection_List[TopoDS_Shape]()
     for obj in args:
         arg.Append(obj)
 
-    tool = List_TopoDS_Shape()
+    tool = NCollection_List[TopoDS_Shape]()
     for obj in tools:
         tool.Append(obj)
 

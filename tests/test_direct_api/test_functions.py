@@ -48,7 +48,7 @@ from build123d.topology.utils import (
     _make_topods_face_from_wires,
     unwrapped_shapetype,
 )
-from OCP.TopAbs import TopAbs_ShapeEnum
+from nanocct.TopAbs import TopAbs_ShapeEnum
 
 
 class TestFunctions(unittest.TestCase):

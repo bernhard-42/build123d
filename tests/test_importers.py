@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from OCP.TopoDS import TopoDS_Edge
+from nanocct.TopoDS import TopoDS_Edge
 
 from build123d import (
     BuildLine,

@@ -55,7 +55,7 @@ from itertools import product
 from math import cos, pi, sqrt
 from typing import Any, Generic, Type, TypeVar, cast
 
-from OCP.Standard import Standard_ConstructionError
+from nanocct.Standard import Standard_ConstructionError
 from typing_extensions import Self, deprecated
 
 from build123d.build_enums import Align, Mode, Select

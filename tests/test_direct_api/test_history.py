@@ -29,10 +29,11 @@ license:
 
 import unittest
 
-from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
-from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
-from OCP.collections import List_TopoDS_Shape
-from OCP.gp import gp_Vec
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_Sewing
+from nanocct.BRepPrimAPI import BRepPrimAPI_MakePrism
+from nanocct.NCollection import NCollection_List
+from nanocct.TopoDS import TopoDS_Shape
+from nanocct.gp import gp_Vec
 
 from build123d.build_enums import Align, GeomType, Select
 from build123d.geometry import Axis, Plane, Pos
@@ -179,7 +180,7 @@ class TestShapeHistory(unittest.TestCase):
     def test_helpers(self):
         subs = tracked_subshapes([self.box.wrapped, None])
         self.assertEqual(len(subs), 8 + 12 + 6 + 1)
-        kernel_list = List_TopoDS_Shape()
+        kernel_list = NCollection_List[TopoDS_Shape]()
         for face in self.box.faces():
             kernel_list.Append(face.wrapped)
         self.assertEqual(len(list_shapes(kernel_list)), 6)

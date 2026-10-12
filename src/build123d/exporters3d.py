@@ -38,35 +38,33 @@ from os import PathLike, fsdecode
 from pathlib import Path
 from typing import BinaryIO, cast
 
-import OCP.TopAbs as ta
+import nanocct.TopAbs as ta
 import requests
 from anytree import PreOrderIter
-from OCP.APIHeaderSection import APIHeaderSection_MakeHeader
-from OCP.BRepMesh import BRepMesh_IncrementalMesh
-from OCP.BRepTools import BRepTools
-from OCP.IFSelect import IFSelect_ReturnStatus
-from OCP.IGESControl import IGESControl_Controller
-from OCP.Interface import Interface_Static
-from OCP.Message import Message, Message_Gravity, Message_ProgressRange
-from OCP.RWGltf import RWGltf_CafWriter
-from OCP.STEPCAFControl import STEPCAFControl_Controller, STEPCAFControl_Writer
-from OCP.STEPControl import STEPControl_Controller, STEPControl_StepModelType
-from OCP.StlAPI import StlAPI_Writer
-from OCP.TCollection import (
+from nanocct.APIHeaderSection import APIHeaderSection_MakeHeader
+from nanocct.BRepMesh import BRepMesh_IncrementalMesh
+from nanocct.BRepTools import BRepTools
+from nanocct.IFSelect import IFSelect_ReturnStatus
+from nanocct.IGESControl import IGESControl_Controller
+from nanocct.Interface import Interface_Static
+from nanocct.Message import Message, Message_Gravity, Message_ProgressRange
+from nanocct.RWGltf import RWGltf_CafWriter
+from nanocct.STEPCAFControl import STEPCAFControl_Controller, STEPCAFControl_Writer
+from nanocct.STEPControl import STEPControl_Controller, STEPControl_StepModelType
+from nanocct.StlAPI import StlAPI_Writer
+from nanocct.TCollection import (
     TCollection_AsciiString,
     TCollection_ExtendedString,
     TCollection_HAsciiString,
 )
-from OCP.collections import (
-    IndexedDataMap_TCollection_AsciiString_TCollection_AsciiString,
-)
-from OCP.TDataStd import TDataStd_Name
-from OCP.TDF import TDF_Label
-from OCP.TDocStd import TDocStd_Document
-from OCP.TopExp import TopExp_Explorer
-from OCP.XCAFApp import XCAFApp_Application
-from OCP.XCAFDoc import XCAFDoc_ColorType, XCAFDoc_DocumentTool, XCAFDoc_ShapeTool
-from OCP.XSControl import XSControl_WorkSession
+from nanocct.NCollection import NCollection_IndexedDataMap
+from nanocct.TDataStd import TDataStd_Name
+from nanocct.TDF import TDF_Label
+from nanocct.TDocStd import TDocStd_Document
+from nanocct.TopExp import TopExp_Explorer
+from nanocct.XCAFApp import XCAFApp_Application
+from nanocct.XCAFDoc import XCAFDoc_ColorType, XCAFDoc_DocumentTool, XCAFDoc_ShapeTool
+from nanocct.XSControl import XSControl_WorkSession
 
 from threejs_materials import PbrProperties, inject_materials
 
@@ -109,7 +107,7 @@ def _create_xde(
     application = XCAFApp_Application.GetApplication_s()
 
     # Create and initialize a new document
-    application.NewDocument(TCollection_ExtendedString("MDTV-XCAF"), doc)
+    doc = application.NewDocument(TCollection_ExtendedString("MDTV-XCAF"))
     application.InitDocument(doc)
 
     XCAFDoc_DocumentTool.SetLengthUnit_s(doc, 1 / UNITS_PER_METER[unit])
@@ -287,10 +285,10 @@ def export_brep(
     """
     _nothing_to_export(to_export)
     if isinstance(file_path, (PathLike | str | bytes)):
-        file_path = fsdecode(file_path)
+        return_value = BRepTools.Write_s(to_export.wrapped, fsdecode(file_path))
     else:
-        file_path = cast(BytesIO, file_path)
-    return_value = BRepTools.Write_s(to_export.wrapped, file_path)
+        cast(BytesIO, file_path).write(BRepTools.Write_s(to_export.wrapped).encode())
+        return_value = None
 
     return True if return_value is None else return_value
 
@@ -360,7 +358,7 @@ def export_gltf(
     writer.SetParallel(True)
     # Textures need UVs in the gltf export
     writer.SetForcedUVExport(True)
-    index_map = IndexedDataMap_TCollection_AsciiString_TCollection_AsciiString()
+    index_map = NCollection_IndexedDataMap[TCollection_AsciiString, TCollection_AsciiString]()
     progress = Message_ProgressRange()
 
     messenger = Message.DefaultMessenger_s()
@@ -479,8 +477,9 @@ def export_step(
     if isinstance(file_path, (PathLike, str, bytes)):
         status = writer.Write(fsdecode(file_path))
     else:
-        # need to cast for type checker because BinaryIO is OK but OCP doesn't know
-        status = writer.WriteStream(cast(BytesIO, file_path))
+        # WriteStream returns the STEP text; the caller's stream is binary
+        status, text = writer.WriteStream()
+        cast(BytesIO, file_path).write(text.encode())
 
     success = status == IFSelect_ReturnStatus.IFSelect_RetDone
     if not success:
@@ -531,7 +530,7 @@ def export_stl(
 
     writer = StlAPI_Writer()
 
-    writer.ASCIIMode = ascii_format
+    writer.SetASCIIMode(ascii_format)
     return writer.Write(to_export.wrapped, str(output_path))
 
 

@@ -35,9 +35,9 @@ from statistics import median
 from typing import Callable, Literal, overload
 
 from scipy.optimize import brentq
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-from OCP.Geom import Geom_CylindricalSurface
-from OCP.gp import gp_Ax3
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+from nanocct.Geom import Geom_CylindricalSurface
+from nanocct.gp import gp_Ax3
 
 from build123d.build_common import flatten_sequence, validate_inputs
 from build123d.build_enums import (

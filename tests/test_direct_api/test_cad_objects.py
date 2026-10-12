@@ -29,8 +29,8 @@ license:
 import math
 import unittest
 
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
-from OCP.gp import gp, gp_Ax2, gp_Circ, gp_Elips, gp_Pnt
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+from nanocct.gp import gp, gp_Ax2, gp_Circ, gp_Elips, gp_Pnt
 from build123d.build_enums import CenterOf
 from build123d.geometry import Plane, Vector
 from build123d.topology import Edge, Face, Wire

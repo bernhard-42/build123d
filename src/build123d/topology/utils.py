@@ -57,24 +57,23 @@ from typing import Any, TYPE_CHECKING
 
 from collections.abc import Iterable
 
-from OCP.BRep import BRep_Builder, BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-from OCP.BRepGProp import BRepGProp, BRepGProp_Face
-from OCP.BRepTools import BRepTools
-from OCP.BRepLib import BRepLib_FindSurface
-from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
-from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
-from OCP.GProp import GProp_GProps
-from OCP.gp import gp_Pnt, gp_Vec
-from OCP.ShapeFix import ShapeFix_Face, ShapeFix_Shape
-from OCP.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
-from OCP.TopExp import TopExp_Explorer
-from OCP.collections import List_TopoDS_Shape
-from OCP.TopoDS import (
-    TopoDS,
+from nanocct.BRep import BRep_Builder, BRep_Tool
+from nanocct.BRepAdaptor import BRepAdaptor_Curve
+from nanocct.BRepAlgoAPI import BRepAlgoAPI_Cut
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+from nanocct.BRepClass3d import BRepClass3d_SolidClassifier
+from nanocct.BRepGProp import BRepGProp, BRepGProp_Face
+from nanocct.BRepTools import BRepTools
+from nanocct.BRepLib import BRepLib_FindSurface
+from nanocct.BRepOffsetAPI import BRepOffsetAPI_ThruSections
+from nanocct.BRepPrimAPI import BRepPrimAPI_MakePrism
+from nanocct.GProp import GProp_GProps
+from nanocct.gp import gp_Pnt, gp_Vec
+from nanocct.ShapeFix import ShapeFix_Face, ShapeFix_Shape
+from nanocct.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
+from nanocct.TopExp import TopExp_Explorer
+from nanocct.NCollection import NCollection_List
+from nanocct.TopoDS import (
     TopoDS_Compound,
     TopoDS_Face,
     TopoDS_Shape,
@@ -83,6 +82,7 @@ from OCP.TopoDS import (
     TopoDS_Edge,
     TopoDS_Wire,
 )
+import nanocct.TopoDS as TopoDS
 from build123d.geometry import TOLERANCE, BoundBox, Vector, VectorLike
 
 from .shape_core import (
@@ -410,13 +410,13 @@ def new_edges(*objects: Shape, combined: Shape) -> ShapeList[Edge]:
         ShapeList[Edge]: new edges
     """
     # Create a list of combined object edges
-    combined_topo_edges = List_TopoDS_Shape()
+    combined_topo_edges = NCollection_List[TopoDS_Shape]()
     for edge in combined.edges():
         if not edge.is_empty:
             combined_topo_edges.Append(edge.wrapped)
 
     # Create a list of original object edges
-    original_topo_edges = List_TopoDS_Shape()
+    original_topo_edges = NCollection_List[TopoDS_Shape]()
     for edge in [e for obj in objects for e in obj.edges()]:
         if not edge.is_empty:
             original_topo_edges.Append(edge.wrapped)

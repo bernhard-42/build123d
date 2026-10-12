@@ -63,23 +63,23 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 from typing import cast as tcast
 from typing import overload
 
-import OCP.TopAbs as ta
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Section
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Sewing
-from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-from OCP.BRepFeat import BRepFeat_SplitShape
-from OCP.BRepFill import BRepFill
-from OCP.BRepGProp import BRepGProp, BRepGProp_Face
-from OCP.BRepLProp import BRepLProp_SLProps
-from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
-from OCP.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Skin
-from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeFilling, BRepOffsetAPI_MakePipeShell
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeRevol
-from OCP.BRepTools import BRepTools, BRepTools_ReShape
-from OCP.gce import gce_MakeLin
-from OCP.Geom import (
+import nanocct.TopAbs as ta
+from nanocct.BRep import BRep_Tool
+from nanocct.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+from nanocct.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Section
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Sewing
+from nanocct.BRepExtrema import BRepExtrema_DistShapeShape
+from nanocct.BRepFeat import BRepFeat_SplitShape
+from nanocct.BRepFill import BRepFill
+from nanocct.BRepGProp import BRepGProp, BRepGProp_Face
+from nanocct.BRepLProp import BRepLProp_SLProps
+from nanocct.BRepIntCurveSurface import BRepIntCurveSurface_Inter
+from nanocct.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Skin
+from nanocct.BRepOffsetAPI import BRepOffsetAPI_MakeFilling, BRepOffsetAPI_MakePipeShell
+from nanocct.BRepPrimAPI import BRepPrimAPI_MakeRevol
+from nanocct.BRepTools import BRepTools, BRepTools_ReShape
+from nanocct.gce import gce_MakeLin
+from nanocct.Geom import (
     Geom_BezierSurface,
     Geom_BSplineCurve,
     Geom_OffsetSurface,
@@ -87,49 +87,46 @@ from OCP.Geom import (
     Geom_Surface,
     Geom_TrimmedCurve,
 )
-from OCP.GeomAbs import (
+from nanocct.GeomAbs import (
     GeomAbs_C0,
     GeomAbs_CurveType,
     GeomAbs_G1,
     GeomAbs_G2,
     GeomAbs_Intersection,
 )
-from OCP.GeomAdaptor import GeomAdaptor_Surface
-from OCP.GeomAPI import (
+from nanocct.GeomAdaptor import GeomAdaptor_Surface
+from nanocct.GeomAPI import (
     GeomAPI_PointsToBSplineSurface,
     GeomAPI_ProjectPointOnSurf,
 )
-from OCP.GeomLib import GeomLib_IsPlanarSurface
-from OCP.gp import gp_Ax1, gp_Ax3, gp_Dir, gp_Pln, gp_Pnt, gp_Vec
-from OCP.GProp import GProp_GProps
-from OCP.Precision import Precision
-from OCP.ShapeAnalysis import ShapeAnalysis_Edge, ShapeAnalysis_Surface
-from OCP.ShapeFix import ShapeFix_Solid
-from OCP.Standard import (
+from nanocct.GeomLib import GeomLib_IsPlanarSurface
+from nanocct.gp import gp_Ax1, gp_Ax3, gp_Dir, gp_Pln, gp_Pnt, gp_Vec
+from nanocct.GProp import GProp_GProps
+from nanocct.Precision import Precision
+from nanocct.ShapeAnalysis import ShapeAnalysis_Edge, ShapeAnalysis_Surface
+from nanocct.ShapeFix import ShapeFix_Solid
+from nanocct.Standard import (
     Standard_ConstructionError,
     Standard_Failure,
     Standard_NoSuchObject,
 )
-from OCP.StdFail import StdFail_NotDone
-from OCP.collections import (
-    Array1_double,
-    Array1_gp_Pnt,
-    Array1_int,
-    HArray2_double,
-    HArray2_gp_Pnt,
-    List_TopoDS_Shape,
-    Sequence_TopoDS_Shape,
+from nanocct.StdFail import StdFail_NotDone
+from nanocct.NCollection import (
+    NCollection_Array1,
+    NCollection_HArray2,
+    NCollection_List,
+    NCollection_Sequence,
 )
-from OCP.TopAbs import TopAbs_Orientation
-from OCP.TopoDS import (
-    TopoDS,
+from nanocct.TopAbs import TopAbs_Orientation
+from nanocct.TopoDS import (
     TopoDS_Edge,
     TopoDS_Face,
     TopoDS_Shape,
     TopoDS_Shell,
     TopoDS_Solid,
 )
-from OCP.TopLoc import TopLoc_Location
+import nanocct.TopoDS as TopoDS
+from nanocct.TopLoc import TopLoc_Location
 from ocp_gordon import interpolate_curve_network
 from typing_extensions import Self
 
@@ -346,7 +343,7 @@ class Mixin2D(ABC, Shape[TOPODS]):
 
         """
 
-        def get(los: List_TopoDS_Shape) -> list:
+        def get(los: NCollection_List[TopoDS_Shape]) -> list:
             """Return objects from List_TopoDS_Shape as list"""
             shapes = []
             for _ in range(los.Size()):
@@ -399,7 +396,7 @@ class Mixin2D(ABC, Shape[TOPODS]):
         # Process the perimeter
         if not perimeter.is_closed:
             raise ValueError("perimeter must be a closed Wire or Edge")
-        perimeter_edges = Sequence_TopoDS_Shape()
+        perimeter_edges = NCollection_Sequence[TopoDS_Shape]()
         seams = [seam for face in self.faces() for seam in face.seams]
         for perimeter_edge in perimeter.edges():
             if not perimeter_edge:
@@ -1423,13 +1420,13 @@ class Face(Mixin2D[TopoDS_Face]):
         ):
             raise ValueError("A weight must be provided for each control point")
 
-        points_ = HArray2_gp_Pnt(1, len(points), 1, len(points[0]))
+        points_ = NCollection_HArray2[gp_Pnt](1, len(points), 1, len(points[0]))
         for i, row_points in enumerate(points):
             for j, point in enumerate(row_points):
                 points_.SetValue(i + 1, j + 1, Vector(point).to_pnt())
 
         if weights:
-            weights_ = HArray2_double(1, len(weights), 1, len(weights[0]))
+            weights_ = NCollection_HArray2[float](1, len(weights), 1, len(weights[0]))
             for i, row_weights in enumerate(weights):
                 for j, weight in enumerate(row_weights):
                     weights_.SetValue(i + 1, j + 1, float(weight))
@@ -1473,15 +1470,15 @@ class Face(Mixin2D[TopoDS_Face]):
         def create_zero_length_bspline_curve(
             point: gp_Pnt, degree: int = 1
         ) -> Geom_BSplineCurve:
-            control_points = Array1_gp_Pnt(1, 2)
+            control_points = NCollection_Array1[gp_Pnt](1, 2)
             control_points.SetValue(1, point)
             control_points.SetValue(2, point)
 
-            knots = Array1_double(1, 2)
+            knots = NCollection_Array1[float](1, 2)
             knots.SetValue(1, 0.0)
             knots.SetValue(2, 1.0)
 
-            multiplicities = Array1_int(1, 2)
+            multiplicities = NCollection_Array1[int](1, 2)
             multiplicities.SetValue(1, degree + 1)
             multiplicities.SetValue(2, degree + 1)
 
@@ -1500,7 +1497,7 @@ class Face(Mixin2D[TopoDS_Face]):
                 raise ValueError("input Edge cannot be empty")
 
             adaptor = BRepAdaptor_Curve(shape.wrapped)
-            curve = BRep_Tool.Curve_s(shape.wrapped, 0, 1)
+            curve = BRep_Tool.Curve_s(shape.wrapped)[0]
             if not (
                 (adaptor.IsPeriodic() and adaptor.IsClosed())
                 or adaptor.GetType() == GeomAbs_CurveType.GeomAbs_BSplineCurve
@@ -1724,7 +1721,7 @@ class Face(Mixin2D[TopoDS_Face]):
         Returns:
             Face: a potentially non-planar face defined by points
         """
-        points_ = HArray2_gp_Pnt(1, len(points), 1, len(points[0]))
+        points_ = NCollection_HArray2[gp_Pnt](1, len(points), 1, len(points[0]))
 
         for i, point_row in enumerate(points):
             for j, point in enumerate(point_row):

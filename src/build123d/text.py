@@ -23,7 +23,7 @@ from fontTools.ttLib import (  # type: ignore
     TTLibFileIsCollectionError,
     ttCollection,
 )
-from OCP.Font import (
+from nanocct.Font import (
     Font_FA_Bold,
     Font_FA_BoldItalic,
     Font_FA_Italic,
@@ -31,8 +31,9 @@ from OCP.Font import (
     Font_FontMgr,
     Font_SystemFont,
 )
-from OCP.TCollection import TCollection_AsciiString
-from OCP.collections import Sequence_TCollection_HAsciiString
+from nanocct.TCollection import TCollection_AsciiString
+from nanocct.NCollection import NCollection_Sequence
+from nanocct.TCollection import TCollection_HAsciiString
 
 from build123d.build_enums import FontStyle
 
@@ -87,7 +88,7 @@ class FontManager:
         self.manager = Font_FontMgr.GetInstance_s()
 
         # Check if OCP manager is already initialized. "singleline" alias is canary
-        aliases = Sequence_TCollection_HAsciiString()
+        aliases = NCollection_Sequence[TCollection_HAsciiString]()
         self.manager.GetAllAliases(aliases)
         aliases = [aliases.Value(i).ToCString() for i in range(1, aliases.Length() + 1)]
 
@@ -135,7 +136,7 @@ class FontManager:
 
     def find_font(self, name: str, style: FontStyle) -> Font_SystemFont:
         """Find font in FontManager library by name and style"""
-        return self.manager.FindFont(TCollection_AsciiString(name), FONT_ASPECT[style])
+        return self.manager.FindFont(TCollection_AsciiString(name), FONT_ASPECT[style])[0]
 
     def register_font(
         self, path: str, override: bool = False, single_stroke: bool = False

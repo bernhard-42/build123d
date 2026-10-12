@@ -59,18 +59,19 @@ from typing import ClassVar, overload, TYPE_CHECKING
 
 from collections.abc import Iterable
 
-import OCP.TopAbs as ta
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve2d
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
-from OCP.BRepTools import BRepTools
-from OCP.IntTools import IntTools_FClass2d
-from OCP.TopExp import TopExp, TopExp_Explorer
-from OCP.collections import (
-    IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher,
-)
-from OCP.TopoDS import TopoDS, TopoDS_Face, TopoDS_Vertex, TopoDS_Edge
-from OCP.gp import gp_Pnt, gp_Pnt2d, gp_Vec2d
+import nanocct.TopAbs as ta
+from nanocct.BRep import BRep_Tool
+from nanocct.BRepAdaptor import BRepAdaptor_Curve2d
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+from nanocct.BRepTools import BRepTools
+from nanocct.IntTools import IntTools_FClass2d
+from nanocct.TopExp import TopExp, TopExp_Explorer
+from nanocct.NCollection import NCollection_IndexedDataMap, NCollection_List
+from nanocct.TopoDS import TopoDS_Shape
+from nanocct.TopTools import TopTools_ShapeMapHasher
+from nanocct.TopoDS import TopoDS_Face, TopoDS_Vertex, TopoDS_Edge
+import nanocct.TopoDS as TopoDS
+from nanocct.gp import gp_Pnt, gp_Pnt2d, gp_Vec2d
 from build123d.geometry import (
     TOLERANCE,
     Matrix,
@@ -308,7 +309,7 @@ class Vertex(Shape[TopoDS_Vertex]):
                 "to classify it against - take it from a face or solid"
             )
         vertex_edge_map = (
-            IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+            NCollection_IndexedDataMap[TopoDS_Shape, NCollection_List[TopoDS_Shape], TopTools_ShapeMapHasher]()
         )
         TopExp.MapShapesAndAncestors_s(
             parent.wrapped, ta.TopAbs_VERTEX, ta.TopAbs_EDGE, vertex_edge_map

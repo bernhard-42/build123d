@@ -29,11 +29,11 @@ license:
 
 from __future__ import annotations
 
-from OCP.TopoDS import TopoDS_Shape
-from OCP.collections import List_TopoDS_Shape
+from nanocct.TopoDS import TopoDS_Shape
+from nanocct.NCollection import NCollection_List
 
 
-def list_shapes(shapes: List_TopoDS_Shape) -> list[TopoDS_Shape]:
+def list_shapes(shapes: NCollection_List[TopoDS_Shape]) -> list[TopoDS_Shape]:
     """A kernel list as a Python list.
 
     Iterating a ``List_TopoDS_Shape`` through its Python protocol costs
@@ -41,7 +41,7 @@ def list_shapes(shapes: List_TopoDS_Shape) -> list[TopoDS_Shape]:
     from the front costs microseconds.
     """
     found: list[TopoDS_Shape] = []
-    remaining = List_TopoDS_Shape()
+    remaining = NCollection_List[TopoDS_Shape]()
     remaining.Assign(shapes)
     while not remaining.IsEmpty():
         found.append(remaining.First())

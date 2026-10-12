@@ -32,7 +32,7 @@ import sys
 from enum import Enum, IntEnum, auto, unique
 from typing import TypeAlias
 
-from OCP.GccEnt import (
+from nanocct.GccEnt import (
     GccEnt_enclosed,
     GccEnt_enclosing,
     GccEnt_outside,

@@ -32,7 +32,7 @@ import math
 
 import numpy as np
 import pytest
-from OCP.Quantity import Quantity_ColorRGBA
+from nanocct.Quantity import Quantity_ColorRGBA
 
 from build123d.geometry import Color
 

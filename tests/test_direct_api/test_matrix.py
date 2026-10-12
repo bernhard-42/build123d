@@ -30,7 +30,7 @@ import copy
 import math
 import unittest
 
-from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf, gp_TrsfForm
+from nanocct.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf, gp_TrsfForm
 from build123d.geometry import Axis, Matrix, Vector
 
 

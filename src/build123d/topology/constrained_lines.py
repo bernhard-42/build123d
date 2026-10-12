@@ -33,13 +33,13 @@ from math import atan2, cos, isnan, sin, pi
 from typing import overload, TYPE_CHECKING, Callable, TypeVar
 from typing import cast as tcast
 
-from OCP.BRep import BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeVertex
-from OCP.BRepLib import BRepLib
-from OCP.GCPnts import GCPnts_AbscissaPoint
-from OCP.Geom import Geom_Plane
-from OCP.Geom2d import (
+from nanocct.BRep import BRep_Tool
+from nanocct.BRepAdaptor import BRepAdaptor_Curve
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeVertex
+from nanocct.BRepLib import BRepLib
+from nanocct.GCPnts import GCPnts_AbscissaPoint
+from nanocct.Geom import Geom_Plane
+from nanocct.Geom2d import (
     Geom2d_CartesianPoint,
     Geom2d_Circle,
     Geom2d_Curve,
@@ -47,9 +47,9 @@ from OCP.Geom2d import (
     Geom2d_Point,
     Geom2d_TrimmedCurve,
 )
-from OCP.Geom2dAdaptor import Geom2dAdaptor_Curve
-from OCP.Geom2dAPI import Geom2dAPI_ProjectPointOnCurve, Geom2dAPI_InterCurveCurve
-from OCP.Geom2dGcc import (
+from nanocct.Geom2dAdaptor import Geom2dAdaptor_Curve
+from nanocct.Geom2dAPI import Geom2dAPI_ProjectPointOnCurve, Geom2dAPI_InterCurveCurve
+from nanocct.Geom2dGcc import (
     Geom2dGcc_Circ2d2TanOn,
     Geom2dGcc_Circ2d2TanRad,
     Geom2dGcc_Circ2d3Tan,
@@ -59,9 +59,9 @@ from OCP.Geom2dGcc import (
     Geom2dGcc_Lin2d2Tan,
     Geom2dGcc_QualifiedCurve,
 )
-from OCP.GeomAbs import GeomAbs_CurveType
-from OCP.GeomAPI import GeomAPI
-from OCP.gp import (
+from nanocct.GeomAbs import GeomAbs_CurveType
+from nanocct.GeomAPI import GeomAPI
+from nanocct.gp import (
     gp_Ax2d,
     gp_Ax3,
     gp_Circ2d,
@@ -73,9 +73,9 @@ from OCP.gp import (
     gp_Pnt2d,
     gp_Vec2d,
 )
-from OCP.IntAna2d import IntAna2d_AnaIntersection
-from OCP.Standard import Standard_ConstructionError, Standard_Failure
-from OCP.TopoDS import TopoDS_Edge
+from nanocct.IntAna2d import IntAna2d_AnaIntersection
+from nanocct.Standard import Standard_ConstructionError, Standard_Failure
+from nanocct.TopoDS import TopoDS_Edge
 
 from build123d.build_enums import Sagitta, Tangency
 from build123d.geometry import Axis, TOLERANCE, Vector, VectorLike
@@ -124,7 +124,7 @@ def _edge_to_qualified_2d(
     """Convert a TopoDS_Edge into 2d curve & extract properties"""
 
     # 1) Underlying curve + range (also retrieve location to be safe)
-    hcurve3d = BRep_Tool.Curve_s(edge, float(), float())
+    hcurve3d = BRep_Tool.Curve_s(edge)[0]
     first, last = BRep_Tool.Range_s(edge)
 
     # 2) Convert to 2D on Plane.XY (Z-up frame at origin)

@@ -33,12 +33,12 @@ import random
 import unittest
 from unittest.mock import MagicMock, PropertyMock, patch
 
-from OCP.BRep import BRep_Tool
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-from OCP.gp import gp_Ax3, gp_Dir, gp_Pnt
-from OCP.Geom import Geom_RectangularTrimmedSurface
-from OCP.Geom import Geom_CylindricalSurface, Geom_OffsetSurface, Geom_ToroidalSurface
-from OCP.StdFail import StdFail_NotDone
+from nanocct.BRep import BRep_Tool
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+from nanocct.gp import gp_Ax3, gp_Dir, gp_Pnt
+from nanocct.Geom import Geom_RectangularTrimmedSurface
+from nanocct.Geom import Geom_CylindricalSurface, Geom_OffsetSurface, Geom_ToroidalSurface
+from nanocct.StdFail import StdFail_NotDone
 
 from build123d.build_common import GridLocations, Locations, PolarLocations
 from build123d.build_enums import (

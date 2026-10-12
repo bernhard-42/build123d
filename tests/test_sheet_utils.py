@@ -4,10 +4,11 @@ from build123d.build_enums import SheetSurface
 from math import pi
 from unittest.mock import patch
 
-import OCP.TopAbs as ta
-from OCP.BRep import BRep_Builder
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopoDS import TopoDS, TopoDS_Edge, TopoDS_Shell
+import nanocct.TopAbs as ta
+from nanocct.BRep import BRep_Builder
+from nanocct.TopExp import TopExp_Explorer
+from nanocct.TopoDS import TopoDS_Edge, TopoDS_Shell
+import nanocct.TopoDS as TopoDS
 
 from build123d import (
     Axis,

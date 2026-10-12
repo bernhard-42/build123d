@@ -49,7 +49,7 @@ from build123d.operations_generic import sweep
 from build123d.operations_generic import fillet
 from build123d.operations_part import extrude
 from build123d.topology import Curve, Edge, Face, Shell, Wire, Vertex
-from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
+from nanocct.BRepBuilderAPI import BRepBuilderAPI_Sewing
 
 
 class TestEdge(unittest.TestCase):

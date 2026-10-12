@@ -2,7 +2,6 @@
 requires = [
     "setuptools>=45",
     "wheel",
-    "setuptools_scm[toml]>=6.2",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -33,7 +32,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "cadquery-ocp-novtk >= 8.0, < 8.1",
+    "nanocct >= 8.0, < 8.1",
     "typing_extensions >= 4.16.0, < 5",
     "numpy >= 2, < 3",
     "svgpathtools >= 1.5.1, < 2",
@@ -84,10 +83,8 @@ development = [
     "wheel",
 ]
 
-# typing stubs for the OCP CAD kernel
-stubs = [
-    "cadquery-ocp-stubs >= 8.0, < 8.1",
-]
+# typing stubs: nanocct ships its own
+stubs = []
 
 # dependencies to build the docs
 docs = [
@@ -113,8 +110,9 @@ where = ["src"]
 # exclude build123d._dev from wheels
 exclude = ["build123d._dev"]
 
-[tool.setuptools_scm]
-write_to = "src/build123d/_version.py"
+# the nanocct port: build123d at 2aec567 (setuptools_scm: 0.13.1.dev132), marked +nanocct
+[tool.setuptools.dynamic]
+version = { attr = "build123d._version.version" }
 
 [tool.black]
 target-version = ["py311", "py312", "py313", "py314"]
