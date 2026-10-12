@@ -100,16 +100,12 @@ def _create_xde(
     Returns:
         TDocStd_Document: XDE document
     """
-    # Create the XCAF document
-    doc = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
-
     # Initialize the XCAF application
     application = XCAFApp_Application.GetApplication_s()
 
     # Create and initialize a new document
-    doc = cast(
-        TDocStd_Document,
-        application.NewDocument(TCollection_ExtendedString("MDTV-XCAF")),
+    doc = application.NewDocument__TDocStd_Document(
+        TCollection_ExtendedString("MDTV-XCAF")
     )
     application.InitDocument(doc)
 
