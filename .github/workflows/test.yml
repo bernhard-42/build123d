@@ -19,7 +19,7 @@ jobs:
           ubuntu-24.04-arm
         ]
         include:
-          - python-version: "3.11"
+          - python-version: "3.12"
             os: ubuntu-latest
 
     runs-on: ${{ matrix.os }}
