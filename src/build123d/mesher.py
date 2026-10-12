@@ -285,7 +285,7 @@ class Mesher:
             isInParallel=True,
         )
 
-        ocp_mesh_vertices = []
+        ocp_mesh_vertices: list[tuple[float, float, float]] = []
         triangles = []
         offset = 0
         for facet in ocp_mesh.faces():

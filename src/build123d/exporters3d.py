@@ -107,7 +107,10 @@ def _create_xde(
     application = XCAFApp_Application.GetApplication_s()
 
     # Create and initialize a new document
-    doc = application.NewDocument(TCollection_ExtendedString("MDTV-XCAF"))
+    doc = cast(
+        TDocStd_Document,
+        application.NewDocument(TCollection_ExtendedString("MDTV-XCAF")),
+    )
     application.InitDocument(doc)
 
     XCAFDoc_DocumentTool.SetLengthUnit_s(doc, 1 / UNITS_PER_METER[unit])

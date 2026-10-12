@@ -34,7 +34,7 @@ import re
 import unicodedata
 from os import PathLike, fsdecode
 from pathlib import Path
-from typing import Literal, TextIO
+from typing import Literal, TextIO, cast
 
 import svgpathtools
 from nanocct.Bnd import Bnd_Box
@@ -150,7 +150,8 @@ def import_step(filename: PathLike | str | bytes) -> Compound:
         if label.IsAttribute(TDataStd_Name.GetID_s()):
             found, std_name = label.FindAttribute(TDataStd_Name.GetID_s())
             if found:
-                name = TCollection_AsciiString(std_name.Get()).ToCString()
+                name_attribute = cast(TDataStd_Name, std_name)
+                name = TCollection_AsciiString(name_attribute.Get()).ToCString()
         # Remove characters that cause ocp_vscode to fail
         clean_name = "".join(ch for ch in name if unicodedata.category(ch)[0] != "C")
         return clean_name.translate(str.maketrans(" .()", "____"))
