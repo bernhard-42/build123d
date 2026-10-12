@@ -496,9 +496,9 @@ class TestEdgeGeomEqualOffset:
     @staticmethod
     def _offset_edge(distance: float, direction=(0, 0, 1)) -> Edge:
         """An edge on an offset curve; offset_2d fits splines to those it makes"""
-        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
-        from OCP.Geom import Geom_OffsetCurve
-        from OCP.gp import gp_Dir
+        from nanocct.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+        from nanocct.Geom import Geom_OffsetCurve
+        from nanocct.gp import gp_Dir
 
         adaptor = Spline((0, 0), (1, 1), (2, 0), (3, 1)).edge().geom_adaptor()
         curve = Geom_OffsetCurve(adaptor.Curve().Curve(), distance, gp_Dir(*direction))

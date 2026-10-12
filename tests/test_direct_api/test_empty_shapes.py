@@ -30,8 +30,8 @@ import pickle
 import tempfile
 import unittest
 
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
-from OCP.TopoDS import TopoDS_Compound
+from nanocct.BRepAlgoAPI import BRepAlgoAPI_Common
+from nanocct.TopoDS import TopoDS_Compound
 
 from build123d.build_enums import Keep, Mode
 from build123d.build_line import BuildLine
