@@ -190,6 +190,12 @@ ShapeConstructor = Callable[[Any], "Shape"]
 GeometryConstructor = Callable[[Any], "Shape"]
 
 
+# A deepcopy memo key: the ids of the shapes a copy must not reach. Every link
+# from the copy to one of them is cut (set to None) instead of being followed,
+# which would copy that shape and the whole tree around it.
+DEEPCOPY_CUT = object()
+
+
 class Shape(NodeMixin, Generic[TOPODS]):
     """Shape
 
@@ -1262,11 +1268,14 @@ class Shape(NodeMixin, Generic[TOPODS]):
         result = cls.__new__(cls)
         memo[id(self)] = result
         memo[id(self.wrapped)] = downcast(BRepBuilderAPI_Copy(self.wrapped).Shape())
+        cut = memo.get(DEEPCOPY_CUT, frozenset())
         for key, value in self.__dict__.items():
             if key in ("topo_path", "_history"):
                 # provenance points at shapes outside the copy, so it is
                 # carried by reference rather than duplicated with it
                 setattr(result, key, value)
+            elif id(value) in cut:
+                setattr(result, key, None)
             else:
                 setattr(result, key, copy.deepcopy(value, memo))
             if key == "joints":

@@ -103,6 +103,7 @@ from build123d.text import FONT_ASPECT, FontManager
 from .one_d import Edge, Wire, Mixin1D
 from .history import ShapeHistory
 from .shape_core import (
+    DEEPCOPY_CUT,
     Shape,
     ShapeList,
     Joint,
@@ -779,12 +780,16 @@ class Compound(Mixin3D[TopoDS_Compound]):
 
         # Copy each child with its own subtree but none of its ancestors, which
         # a copy would otherwise reach through the parent link and duplicate
-        # once per child. Joints owned by an ancestor are shared rather than
-        # copied without their owner, so a child's joint connected to one
-        # stays usable.
-        outside: dict[int, object] = {}
+        # once per child: every link to an ancestor is cut (DEEPCOPY_CUT), and
+        # the ancestors themselves are never copied. Joints owned by an ancestor
+        # are shared rather than copied without their owner, so a child's joint
+        # connected to one stays usable. (A memo entry of None cut the links
+        # until Python 3.15, whose deepcopy reads None as "not copied yet".)
+        outside: dict[object, object] = {
+            DEEPCOPY_CUT: frozenset(id(node) for node in self.path)
+        }
         for node in self.path:
-            outside[id(node)] = None
+            outside[id(node)] = node
             for joint in node.joints.values():
                 if joint.parent is node:
                     outside[id(joint)] = joint
