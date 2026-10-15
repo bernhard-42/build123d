@@ -20,8 +20,8 @@ from build123d.topology import Compound, Part, Solid
 from build123d.geometry import Axis, Color, Location, Plane, Vector, VectorLike
 from build123d.joints import RigidJoint
 from build123d.mesher import Mesher
-from OCP.BRep import BRep_Tool
-from OCP.TopLoc import TopLoc_Location
+from nanocct.BRep import BRep_Tool
+from nanocct.TopLoc import TopLoc_Location
 
 
 def temp_3mf_file():

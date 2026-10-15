@@ -39,8 +39,8 @@ from math import cos, radians, sin, tan
 from pathlib import Path
 
 import pytest
-from OCP.Standard import Standard_Failure
-from OCP.StdFail import StdFail_NotDone
+from nanocct.Standard import Standard_Failure
+from nanocct.StdFail import StdFail_NotDone
 
 from build123d import (
     Align,
@@ -111,20 +111,20 @@ def occt_defect(issue: int, summary: str):
 class TestBooleanSeams(unittest.TestCase):
     """UnifySameDomain after a boolean damages seam-split periodic faces"""
 
-    @occt_defect(1428, "clean() deletes the sphere cap crossed by the seam")
+    # build123d #1428 does not reproduce: nanocct.AddOns.ShapeClean fixes it
     def test_sphere_minus_box_keeps_all_caps(self):
         caps = Sphere(5) - Box(8, 8, 8)
         self.assertEqual(len(caps.solids()), 6)
         self.assertAlmostEqual(caps.volume, 87.9646, 3)
 
-    @occt_defect(590, "box minus a sphere crossing its seam is invalid")
+    # build123d #590 does not reproduce: nanocct.AddOns.ShapeClean fixes it
     def test_box_minus_sphere_dimple(self):
         dimpled = Box(2, 2, 2) - Pos(-1.5) * Sphere(1)
         self.assertTrue(dimpled.is_valid)
         cap_volume = math.pi * 0.5**2 * (3 - 0.5) / 3
         self.assertAlmostEqual(dimpled.volume, 8 - cap_volume, 3)
 
-    @occt_defect(1271, "fusing a bump near the seam of a sphere loses the bump")
+    # build123d #1271 does not reproduce: nanocct.AddOns.ShapeClean fixes it
     def test_sphere_bump_fuse(self):
         hemisphere = Sphere(
             40, arc_size1=0, arc_size2=90, align=(Align.CENTER, Align.CENTER, Align.MIN)
