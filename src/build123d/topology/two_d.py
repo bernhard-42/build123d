@@ -153,6 +153,7 @@ from build123d.geometry import (
 )
 from build123d.sheet_utils import (
     SheetMetalParameters,
+    UnfoldOutput,
     _unfold_shell,
     _uv_topods_edge,
     _uv_topods_face_with_map,
@@ -183,6 +184,7 @@ from .utils import (
     _extrude_topods_shape,
     _make_loft,
     _make_topods_face_from_wires,
+    _make_topods_face_on_surface,
     _make_topods_shell,
     _topods_face_center,
     _topods_face_position,
@@ -823,8 +825,16 @@ class Face(Mixin2D[TopoDS_Face]):
         label: str = "",
         color: Color | None = None,
         parent: Compound | None = None,
+        surface: Face | None = None,
     ):
-        """Build a planar Face from a boundary Wire with optional hole Wires.
+        """Build a Face from a boundary Wire with optional hole Wires.
+
+        The face lies on ``surface``'s surface, or on the plane the wires lie
+        in when no surface is given. The surface is used untrimmed and where
+        ``surface`` places it, so any face on the right surface will do: the
+        wall of a cylinder or cone made with the surface's axis and radius,
+        for instance. The wires must lie on that surface; they are not
+        projected onto it from elsewhere.
 
         Args:
             outer_wire (Wire): closed perimeter wire
@@ -832,11 +842,18 @@ class Face(Mixin2D[TopoDS_Face]):
             label (str, optional): Defaults to ''.
             color (Color, optional): Defaults to None.
             parent (Compound, optional): assembly parent. Defaults to None.
+            surface (Face, optional): a face on the surface to build on.
+                Defaults to None: the plane the wires lie in.
+
+        Raises:
+            ValueError: a wire is not closed, the wires are not planar when no
+                surface is given, or an empty surface
+            RuntimeError: the wires do not lie on the surface
         """
 
     def __init__(self, *args: Any, **kwargs: Any):
         obj: TopoDS_Face | Plane | None
-        outer_wire, inner_wires, obj, label, color, parent = (None,) * 6
+        outer_wire, inner_wires, obj, label, color, parent, surface = (None,) * 7
 
         if args:
             l_a = len(args)
@@ -845,9 +862,9 @@ class Face(Mixin2D[TopoDS_Face]):
             elif isinstance(args[0], TopoDS_Shape):
                 obj, label, color, parent = args[:4] + (None,) * (4 - l_a)
             elif isinstance(args[0], Wire):
-                outer_wire, inner_wires, label, color, parent = args[:5] + (None,) * (
-                    5 - l_a
-                )
+                outer_wire, inner_wires, label, color, parent, surface = args[
+                    :6
+                ] + (None,) * (6 - l_a)
 
         unknown_args = ", ".join(
             set(kwargs.keys()).difference(
@@ -858,6 +875,7 @@ class Face(Mixin2D[TopoDS_Face]):
                     "label",
                     "color",
                     "parent",
+                    "surface",
                 ]
             )
         )
@@ -870,6 +888,7 @@ class Face(Mixin2D[TopoDS_Face]):
         label = kwargs.get("label", label)
         color = kwargs.get("color", color)
         parent = kwargs.get("parent", parent)
+        surface = kwargs.get("surface", surface)
 
         if isinstance(obj, Plane):
             obj = BRepBuilderAPI_MakeFace(obj.wrapped).Face()
@@ -883,7 +902,16 @@ class Face(Mixin2D[TopoDS_Face]):
                 for w in [outer_wire.wrapped] + inner_topods_wires
             ):
                 raise ValueError("Face can only be created with closed wires")
-            obj = _make_topods_face_from_wires(outer_wire.wrapped, inner_topods_wires)
+            if surface is None:
+                obj = _make_topods_face_from_wires(
+                    outer_wire.wrapped, inner_topods_wires
+                )
+            else:
+                if surface.is_empty:
+                    raise ValueError("Can't build a face on an empty surface")
+                obj = _make_topods_face_on_surface(
+                    surface.wrapped, outer_wire.wrapped, inner_topods_wires
+                )
 
         super().__init__(
             obj=obj,
@@ -2211,9 +2239,18 @@ class Face(Mixin2D[TopoDS_Face]):
         )
 
     def _sheet_selected_from(self) -> Shape:
-        """The shell this face was taken from, for questions about its neighbours."""
+        """The shell this face was taken from, for questions about its neighbours.
+
+        A sheet of one flat is still a sheet, so a Shell parent is accepted
+        whatever its face count; any other parent has to hold more than this
+        face, or it is only a wrapper around it and knows no neighbours.
+        """
         parent = self.topo_parent
-        if parent is None or parent.is_empty or len(parent.faces()) < 2:
+        if (
+            parent is None
+            or parent.is_empty
+            or (len(parent.faces()) < 2 and not isinstance(parent, Shell))
+        ):
             raise ValueError(
                 "this face was not selected from a sheet, so its neighbours are "
                 "unknown - take it from the sheet, as in sheet.flats()[0]"
@@ -2726,8 +2763,10 @@ class Face(Mixin2D[TopoDS_Face]):
         A shape crossing the seam of a periodic surface is split there, as
         the kernel's own faces are: a wire gets a vertex at the seam, and a
         face comes back as a Shell of one face per period it reaches into,
-        which thickens and fuses as one. A shape spanning a whole turn or
-        more, or surrounding a pole of the surface, is refused.
+        which thickens and fuses as one. A shape may span more than a whole
+        turn when it is sheared along the surface, as a helical band is; one
+        that would overlap itself once wrapped, or one surrounding a pole of
+        the surface, is refused.
 
         :meth:`uv_frame` gives the frame behind this, which can also punch an
         outline into the face.
@@ -2740,8 +2779,8 @@ class Face(Mixin2D[TopoDS_Face]):
                 curve's image has to be interpolated. Defaults to 1e-4.
 
         Raises:
-            ValueError: empty face, or the shape spans a whole turn of the
-                surface or surrounds a pole
+            ValueError: empty face, or the shape would overlap itself wrapped
+                around the surface or surrounds a pole
             TypeError: planar_shape is not an Edge, Wire or Face
 
         Returns:
@@ -2844,15 +2883,28 @@ class Shell(Mixin2D[TopoDS_Shell]):
         label: str = "",
         color: Color | None = None,
         parent: Compound | None = None,
+        tolerance: float = TOLERANCE,
     ):
         """Build a shell from an OCCT TopoDS_Shape/TopoDS_Shell
+
+        Faces are sewn together where their edges coincide. Edges further apart
+        than ``tolerance`` stay separate, so faces whose shared edges were
+        built independently, as approximated copies of one curve, may need a
+        tolerance above the approximation error to close into one shell.
 
         Args:
             obj (TopoDS_Shape | Face | Iterable[Face], optional): OCCT Shell, Face or Faces.
             label (str, optional): Defaults to ''.
             color (Color, optional): Defaults to None.
             parent (Compound, optional): assembly parent. Defaults to None.
+            tolerance (float, optional): largest gap between edges that are
+                sewn as one. Defaults to TOLERANCE.
+
+        Raises:
+            ValueError: tolerance is not positive
         """
+        if tolerance <= 0:
+            raise ValueError("tolerance must be positive")
         obj = list(obj) if isinstance(obj, Iterable) else obj
         if isinstance(obj, Iterable) and len(obj_list := list(obj)) == 1:
             obj = obj_list[0]
@@ -2862,7 +2914,7 @@ class Shell(Mixin2D[TopoDS_Shell]):
                 raise ValueError("Can't create a Shell from empty Face")
             obj = _make_topods_shell([obj.wrapped])
         elif isinstance(obj, Iterable):
-            obj = _make_topods_shell([f.wrapped for f in obj])
+            obj = _make_topods_shell([f.wrapped for f in obj], tolerance)
 
         super().__init__(
             obj=obj,
@@ -3215,7 +3267,9 @@ class Shell(Mixin2D[TopoDS_Shell]):
         """
         return tcast(Shell, super().__add__(other))
 
-    def unfold(self, sheet_parameters: SheetMetalParameters | None = None) -> Shell:
+    def unfold(
+        self, sheet_parameters: SheetMetalParameters | None = None
+    ) -> UnfoldOutput:
         """Develop this planar/cylindrical shell onto ``Plane.XY``.
 
         Adjacent faces are placed by matching the developed representations of
@@ -3228,6 +3282,13 @@ class Shell(Mixin2D[TopoDS_Shell]):
         bend to its neutral radius using the face orientation to distinguish
         positive and negative bends.
 
+        The result unpacks as ``flat, face_map = shell.unfold(parameters)``:
+        the flat pattern, and a :class:`~sheet_utils.FaceMap` that answers
+        ``face_map[face]`` for any face of the pattern with an
+        :class:`~sheet_utils.UnfoldedFace` saying which face of this shell it
+        developed from and, for a bend, its angle, radii, bend line and
+        direction.
+
         Args:
             sheet_parameters: Optional material and reference-surface parameters
                 used to produce a neutral-axis flat pattern.
@@ -3238,11 +3299,13 @@ class Shell(Mixin2D[TopoDS_Shell]):
                 consistently without a cut.
 
         Returns:
-            The developed shell on ``Plane.XY``.
+            UnfoldOutput: the developed shell on ``Plane.XY`` and the record
+            of its faces
         """
         if not self:
             raise ValueError("unfold requires a non-empty Shell")
-        return Shell(_unfold_shell(self.wrapped, sheet_parameters))
+        flat, face_map = _unfold_shell(self.wrapped, sheet_parameters)
+        return UnfoldOutput(Shell(flat), face_map)
 
     def center(self) -> Vector:
         """Center of mass of the shell"""

@@ -100,14 +100,14 @@ def _create_xde(
     Returns:
         TDocStd_Document: XDE document
     """
-    # Initialize the XCAF application
-    application = XCAFApp_Application.GetApplication_s()
-
-    # Create and initialize a new document
-    doc = application.NewDocument__TDocStd_Document(
-        TCollection_ExtendedString("MDTV-XCAF")
-    )
-    application.InitDocument(doc)
+    # Create and initialize the XCAF document. It is built directly, as the
+    # importers build theirs, and never opened in the XCAF application:
+    # InitDocument is all the writers need, and a document that was never
+    # opened leaves nothing behind to close (#1522). NewDocument would open a
+    # document in the application and hand it back, which leaks one open
+    # document per export unless every exporter closes it afterwards.
+    doc = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+    XCAFApp_Application.GetApplication_s().InitDocument(doc)
 
     XCAFDoc_DocumentTool.SetLengthUnit_s(doc, 1 / UNITS_PER_METER[unit])
 

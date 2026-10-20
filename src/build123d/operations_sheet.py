@@ -28,7 +28,7 @@ license:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import combinations
 from math import asin, atan, cos, degrees, radians, sin, sqrt, tan
 from statistics import median
@@ -43,18 +43,22 @@ from build123d.build_common import flatten_sequence, validate_inputs
 from build123d.build_enums import (
     Align,
     BendPosition,
-    FlangeLength,
     ReliefType,
     GeomType,
     HemType,
     Keep,
+    LengthFrom,
+    LengthMode,
     Mode,
 )
 from build123d.build_sheet import BuildSheet
 from build123d.geometry import Matrix, TOLERANCE, Axis, Location, Plane, Vector
 from build123d.sheet_utils import (
     MIN_BEND_RADIUS,
+    FaceMap,
     SheetMetalParameters,
+    UnfoldedFace,
+    UnfoldOutput,
     is_positive_bend,
     bend_allowance,
     neutral_radius,
@@ -537,22 +541,24 @@ def _apply_faces(
 
     Faces of the target in ``replaced`` are ones the operation rebuilt; they
     leave the sheet and what replaced them arrives among the additions.
+
+    The faces are sewn as they are, in both modes. The builder's ``Mode.ADD``
+    merges coplanar faces that touch, which is right for sketch material
+    arriving in pieces but not for an operation's output: two flanges folded
+    flat off adjacent walls meet at the corner, and merged they would be one
+    face with nothing left to miter. So the builder is handed the whole
+    sheet with ``Mode.REPLACE``, which sews without merging and still works
+    out which faces the operation brought in.
     """
-    if not replaced:
-        if context is not None:
-            context._add_to_context(*additions)
-            return context.sheet_local
-        faces = list(target.faces()) + additions
-    else:
-        kept = [
-            face
-            for face in target.faces()
-            if not any(face.is_same(old) for old in replaced)
-        ]
-        faces = kept + additions
-        if context is not None:
-            context._add_to_context(*faces, mode=Mode.REPLACE)
-            return context.sheet_local
+    kept = [
+        face
+        for face in target.faces()
+        if not any(face.is_same(old) for old in replaced or [])
+    ]
+    faces = kept + additions
+    if context is not None:
+        context._add_to_context(*faces, mode=Mode.REPLACE)
+        return context.sheet_local
     joined = Shell.make_sheet(faces)
     if joined._history is not None:
         joined._history.with_inputs([target.wrapped], (a.wrapped for a in additions))
@@ -566,7 +572,8 @@ def flange(
     radius: float | None = None,
     gaps: float | tuple[float, float] = 0,
     position: BendPosition = BendPosition.BEND_OUTSIDE,
-    length_mode: FlangeLength = FlangeLength.TANGENT,
+    length_mode: LengthMode = LengthMode.DIAGONAL,
+    length_from: LengthFrom = LengthFrom.TANGENT,
     sheet_parameters: SheetMetalParameters | None = None,
 ) -> Shell:
     """Create cylindrical bends and planar flanges from free sheet edges.
@@ -588,15 +595,19 @@ def flange(
 
     ``length`` is the flat wall by default, measured from the bend's tangent
     line. A drawing more often gives the overall size, to the corner the part
-    would have if it were folded sharp, and ``length_mode`` takes it that way:
+    would have if it were folded sharp, and ``length_from`` takes it that way:
     ``INNER_SHARP`` measures from the corner the inner faces make and
-    ``OUTER_SHARP`` from the outer one, leaving the trigonometry to the
-    flange. With ``position`` placing the corner behind the bend on the edge,
-    the drawing's dimensions can be used as they are on both sides of it.
+    ``OUTER_SHARP`` from the outer one. A wall at an angle is as often
+    dimensioned by its height above the face it comes from, or its reach along
+    it, and ``length_mode`` names which side of that triangle ``length`` is, as
+    it does for ``PolarLine``: the wall itself is the ``DIAGONAL``, its height
+    the ``VERTICAL`` and its run the ``HORIZONTAL``. The trigonometry is left
+    to the flange. With ``position`` placing the corner behind the bend on the
+    edge, the drawing's dimensions can be used as they are on both sides of it.
 
     Args:
         edges: Linear free boundary edge or edges.
-        length: Flange length, measured as ``length_mode`` says.
+        length: Flange length, as ``length_mode`` and ``length_from`` say.
         angle: Signed bend angle in degrees. Defaults to 90.
         radius: Physical inside bend radius. Defaults to the bend radius in
             ``sheet_parameters``.
@@ -604,7 +615,10 @@ def flange(
             specifies ``(edge start, edge end)``. Defaults to 0.
         position: Where the bend sits relative to the edge. Defaults to
             ``BEND_OUTSIDE``, the whole bend past the edge.
-        length_mode: Where ``length`` is measured from. Defaults to
+        length_mode: Which side of the triangle the wall makes with its face
+            ``length`` is: the wall, its height above the face or its run
+            along it. Defaults to ``DIAGONAL``, the wall.
+        length_from: Where ``length`` is measured from. Defaults to
             ``TANGENT``, the bend's tangent line.
         sheet_parameters: Material and reference-surface parameters. Required
             in Algebra mode and supplied by ``BuildSheet`` in Builder mode.
@@ -623,20 +637,22 @@ def flange(
     _check_bend_angle(angle)
     gap_pair = _gap_pair(gaps)
     _check_position(position)
-    if not isinstance(length_mode, FlangeLength):
-        raise TypeError("length_mode must be a FlangeLength")
+    if not isinstance(length_mode, LengthMode):
+        raise TypeError("length_mode must be a LengthMode")
+    if not isinstance(length_from, LengthFrom):
+        raise TypeError("length_from must be a LengthFrom")
     parameters = _resolve_sheet_parameters(context, sheet_parameters)
     radius = _bend_radius(parameters, radius)
-    leg_length = length
-    if length_mode is not FlangeLength.TANGENT:
+    leg_length = _wall_length(length, length_mode, angle)
+    if length_from is not LengthFrom.TANGENT:
         to_sharp = _virtual_sharp(
             angle,
             radius,
             parameters.thickness,
-            length_mode is FlangeLength.OUTER_SHARP,
-            length_mode,
+            length_from is LengthFrom.OUTER_SHARP,
+            length_from,
         )
-        leg_length = length - to_sharp
+        leg_length -= to_sharp
         if leg_length <= TOLERANCE:
             raise ValueError(
                 f"length must exceed the {to_sharp:.4g} from the virtual sharp to "
@@ -655,6 +671,34 @@ def flange(
         position,
     )
     return _apply_faces(context, target, additions, replaced)
+
+
+def _wall_length(length: float, length_mode: LengthMode, angle: float) -> float:
+    """The wall a drawing's length means, from the side of the triangle it is.
+
+    A wall at an angle to its face makes a right triangle with it: the wall is
+    the hypotenuse, its height above the face one side and its run along the
+    face the other. ``length_mode`` says which of them ``length`` is, and the
+    wall is what the flange makes. The height is the same whichever way the
+    wall leans, so the angle's sign does not matter, and a wall leaning back
+    over its face has a run all the same.
+    """
+    if length_mode is LengthMode.DIAGONAL:
+        return length
+    turn = radians(abs(angle))
+    if length_mode is LengthMode.VERTICAL:
+        if abs(sin(turn)) < TOLERANCE:
+            raise ValueError(
+                "a 180 degree wall lies along its face and has no height - "
+                "length_mode VERTICAL needs another angle"
+            )
+        return length / abs(sin(turn))
+    if abs(cos(turn)) < TOLERANCE:
+        raise ValueError(
+            "a 90 degree wall stands square to its face and has no run along "
+            "it - length_mode HORIZONTAL needs another angle"
+        )
+    return length / abs(cos(turn))
 
 
 def _owning_shell(context: BuildSheet | None, shapes: list, what: str) -> Shell:
@@ -1620,11 +1664,19 @@ def unfold(
     sheet: Shell | None = None,
     sheet_parameters: SheetMetalParameters | None = None,
     align: Align | tuple[Align, Align] | None = Align.NONE,
-) -> Shell:
+) -> UnfoldOutput:
     """Sheet Operation: unfold
 
     Develop a sheet metal reference shell into its flat pattern on ``Plane.XY``
     - the blank the folded part is cut from.
+
+    The result unpacks as ``flat, face_map = unfold()``: the pattern, and a
+    :class:`~sheet_utils.FaceMap` that answers ``face_map[face]`` for any face
+    of the pattern with an :class:`~sheet_utils.UnfoldedFace`. A flat's entry
+    says which face of the sheet it came from; a bend's adds the angle, the
+    inside and neutral radii, the bend line through the middle of its strip
+    and whether it folds up, toward +Z, as the blank lies. That is what a
+    press brake needs that the outline alone does not say.
 
     Each bend is developed at its neutral radius, derived from the thickness,
     K-factor and reference surface. :meth:`~topology.Shell.unfold` defaults to
@@ -1653,7 +1705,7 @@ def unfold(
         ValueError: sheet_parameters is supplied by the active BuildSheet
 
     Returns:
-        Shell: the flat pattern
+        UnfoldOutput: the flat pattern and the record of its faces
     """
     context: BuildSheet | None = BuildSheet._get_context("unfold")
     validate_inputs(context, "unfold", [sheet] if sheet is not None else None)
@@ -1667,8 +1719,21 @@ def unfold(
     if not sheet.faces():
         raise ValueError("Can't unfold an empty sheet Shell")
 
-    flat = sheet.unfold(_resolve_sheet_parameters(context, sheet_parameters))
-    return flat.moved(Location(flat.bounding_box().to_align_offset(align)))
+    flat, face_map = sheet.unfold(_resolve_sheet_parameters(context, sheet_parameters))
+    offset = Location(flat.bounding_box().to_align_offset(align))
+    # a move keeps the faces' kernel shapes, so the keys still answer for the
+    # moved pattern; only the bend lines have to follow it
+    aligned: FaceMap[UnfoldedFace] = FaceMap(
+        {
+            key: (
+                replace(record, bend_line=record.bend_line.moved(offset))
+                if record.bend_line is not None
+                else record
+            )
+            for key, record in face_map.items()
+        }
+    )
+    return UnfoldOutput(flat.moved(offset), aligned)
 
 
 def sheet_shells(
