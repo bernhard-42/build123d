@@ -35,6 +35,7 @@ import math
 import re
 import tempfile
 import unittest
+from importlib.metadata import PackageNotFoundError, version
 from math import cos, radians, sin, tan
 from pathlib import Path
 
@@ -93,9 +94,28 @@ from build123d import (
 )
 
 
-def occt_defect(issue: int, summary: str):
-    """Mark a test as failing because of the OpenCascade defect behind an issue"""
+def _nanocct_version() -> tuple[int, ...] | None:
+    """The installed nanocct's version; None for a source tree without metadata"""
+    try:
+        return tuple(int(part) for part in version("nanocct").split(".")[:4])
+    except PackageNotFoundError:
+        return None
+
+
+def occt_defect(issue: int, summary: str, fixed_in_nanocct: str | None = None):
+    """Mark a test as failing because of the OpenCascade defect behind an issue.
+
+    fixed_in_nanocct: the nanocct release whose nanocct.AddOns works around the
+    defect; from that release on, and on a nanocct source tree, the test is an
+    ordinary regression test.
+    """
+    installed = _nanocct_version()
+    defective = fixed_in_nanocct is None or (
+        installed is not None
+        and installed < tuple(int(part) for part in fixed_in_nanocct.split("."))
+    )
     return pytest.mark.xfail(
+        condition=defective,
         reason=f"build123d #{issue}: {summary}",
         strict=True,
         raises=(
@@ -137,7 +157,11 @@ class TestBooleanSeams(unittest.TestCase):
         self.assertTrue(bumped.is_valid)
         self.assertGreater(bumped.volume, hemisphere.volume)
 
-    @occt_defect(1123, "a hole through an extruded arc shell is incomplete")
+    @occt_defect(
+        1123,
+        "a hole through an extruded arc shell is incomplete",
+        fixed_in_nanocct="8.0.1.4",
+    )
     def test_hole_through_cylindrical_shell(self):
         inner = CenterArc((0, 0), 50, -30, 60)
         outer = CenterArc((0, 0), 60, -30, 60)
@@ -151,7 +175,11 @@ class TestBooleanSeams(unittest.TestCase):
         # the hole is longer than the 10 wall thickness where it crosses the arcs
         self.assertAlmostEqual(shell.volume - holed.volume, 3154.85, 1)
 
-    @occt_defect(1363, "a radial hole through a revolved body is invalid")
+    @occt_defect(
+        1363,
+        "a radial hole through a revolved body is invalid",
+        fixed_in_nanocct="8.0.1.4",
+    )
     def test_radial_hole_through_revolved_body(self):
         base = revolve(Plane.XZ * Rectangle(6, 20, align=Align.MIN), axis=Axis.Z)
         outer = revolve(
