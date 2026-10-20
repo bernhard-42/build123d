@@ -196,7 +196,11 @@ class TestBooleanSeams(unittest.TestCase):
         self.assertTrue(holed.is_valid)
         self.assertGreater(model.volume - holed.volume, 1)
 
-    @occt_defect(902, "mirroring a revolved part creates ghost geometry")
+    @occt_defect(
+        902,
+        "mirroring a revolved part creates ghost geometry",
+        fixed_in_nanocct="8.0.1.4",
+    )
     def test_mirror_of_revolved_part(self):
         with BuildPart() as part:
             with BuildSketch(Plane.YZ) as profile:
