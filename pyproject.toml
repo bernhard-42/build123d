@@ -112,7 +112,7 @@ where = ["src"]
 # exclude build123d._dev from wheels
 exclude = ["build123d._dev"]
 
-# the nanocct port: build123d at b17ed70 (setuptools_scm: 0.13.1.dev212), marked +nanocct; update with every merge of dev
+# the nanocct port: build123d at 1b101b5 (setuptools_scm: 0.13.1.dev235), marked +nanocct; update with every merge of dev
 [tool.setuptools.dynamic]
 version = { attr = "build123d._version.version" }
 

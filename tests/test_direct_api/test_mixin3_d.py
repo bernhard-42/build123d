@@ -29,11 +29,11 @@ license:
 import unittest
 from unittest.mock import Mock, patch, PropertyMock
 
-from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
-from OCP.ChFiDS import ChFiDS_ErrorStatus
-from OCP.Standard import Standard_Failure
-from OCP.StdFail import StdFail_NotDone
-from OCP.TopoDS import TopoDS
+from nanocct.BRepFilletAPI import BRepFilletAPI_MakeFillet
+from nanocct.ChFiDS import ChFiDS_ErrorStatus
+from nanocct.Standard import Standard_Failure
+from nanocct.StdFail import StdFail_NotDone
+import nanocct.TopoDS as TopoDS
 
 from build123d.build_enums import CenterOf, GeomType, Kind
 from build123d.build_part import BuildPart
